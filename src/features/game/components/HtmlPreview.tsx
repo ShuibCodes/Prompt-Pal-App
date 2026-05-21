@@ -7,6 +7,11 @@ import type React from "react";
 interface HtmlPreviewProps {
 	html: string;
 	height?: number;
+	/**
+	 * Play the fade-in entrance. Disable inside a ScrollView/animated container: a
+	 * reanimated `entering` animation there can leave the WebView stuck invisible.
+	 */
+	animateIn?: boolean;
 }
 
 function isBlankPage(html: string): boolean {
@@ -22,7 +27,11 @@ const EMPTY_PAGE_PLACEHOLDER = `
   </div>
 `;
 
-export function HtmlPreview({ html, height = 200 }: HtmlPreviewProps) {
+export function HtmlPreview({
+	html,
+	height = 200,
+	animateIn = true,
+}: HtmlPreviewProps) {
 	if (!html || !html.trim()) return null;
 
 	const sanitized = sanitizeHtmlForWebView(html);
@@ -49,7 +58,7 @@ export function HtmlPreview({ html, height = 200 }: HtmlPreviewProps) {
 
 	return (
 		<Animated.View
-			entering={FadeIn.duration(400)}
+			entering={animateIn ? FadeIn.duration(400) : undefined}
 			style={[styles.container, { height, minHeight: Math.min(120, height) }]}
 		>
 			{Platform.OS === "web" ? (

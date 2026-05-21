@@ -23,9 +23,10 @@ export function AuthField({
 				{label}
 			</Text>
 			<View
-				className={`h-16 flex-row items-center rounded-[20px] border bg-surfaceVariant/45 px-4 ${
-					error ? "border-error" : "border-outline/25"
-				}`}
+				className="h-16 flex-row items-center rounded-[20px] border bg-surfaceVariant/45 px-4"
+				style={{
+					borderColor: error ? "#EF4444" : "rgba(156, 163, 175, 0.25)",
+				}}
 			>
 				<View className="w-6 items-center">
 					<Ionicons name={icon} size={20} color={iconColor} />

@@ -5,10 +5,8 @@ import {
 	Alert,
 	ScrollView,
 	TouchableOpacity,
-	Dimensions,
 	ActivityIndicator,
 	Keyboard,
-	KeyboardAvoidingView,
 	Platform,
 	InputAccessoryView,
 	TextInput,
@@ -18,13 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import {
-	Button,
-	Card,
-	Badge,
-	ResultModal,
-	Modal,
-} from "@/components/ui";
+import { Button, Card, Badge } from "@/components/ui";
 import { processApiLevelsWithLocalAssets } from "@/features/levels/data";
 import { useGameStore, Level, ChallengeType } from "@/features/game/store";
 import { useUserProgressStore } from "@/features/user/store";
@@ -46,6 +38,10 @@ import {
 import { HtmlPreview } from "@/features/game/components/HtmlPreview";
 import { CopyTargetPreview } from "@/features/game/components/CopyTargetPreview";
 import { QuestPromptInputCard } from "@/features/game/components/QuestPromptInputCard";
+import { ChallengeBottomSheet } from "@/features/game/components/ChallengeBottomSheet";
+import { ChallengeScoreBar } from "@/features/game/components/ChallengeScoreBar";
+import { TargetExpandModal } from "@/features/game/components/TargetExpandModal";
+import { TargetImageView } from "@/features/game/components/TargetImageView";
 import {
 	findFirstPlaceholderRange,
 	HINT_XP_COST,
@@ -108,8 +104,6 @@ function mapQuestLessonToLevel(lesson: any): Level {
 		hints: lesson.contentPayload?.hints ?? [],
 	};
 }
-
-const { height: screenHeight } = Dimensions.get("window");
 
 type UserLevelAttempt = {
 	id: string;
@@ -206,7 +200,14 @@ export default function QuestScreen() {
 	const [copyScoringResult, setCopyScoringResult] =
 		useState<CopyScoringResult | null>(null);
 	const [activeTab, setActiveTab] = useState<"target" | "attempt">("target");
-	const [showResult, setShowResult] = useState(false);
+	// Option B challenge sheet: which phase the sheet shows (prompt vs result),
+	// whether it is expanded, the prompt-quality score (second result bar), and
+	// whether the full-screen target preview is open.
+	const [phase, setPhase] = useState<"prompt" | "result">("prompt");
+	// Current sheet snap: 0 = peek (target fully visible), 1 = mid (~40%), 2 = full.
+	const [snapIndex, setSnapIndex] = useState(1);
+	const [promptQuality, setPromptQuality] = useState<number | null>(null);
+	const [targetExpanded, setTargetExpanded] = useState(false);
 	const [showHelpModal, setShowHelpModal] = useState(false);
 	const [lastScore, setLastScore] = useState<number | null>(null);
 	const [feedback, setFeedback] = useState<string[]>([]);
@@ -238,14 +239,9 @@ export default function QuestScreen() {
 		useState("");
 	const [beginnerSlotValues, setBeginnerSlotValues] = useState<string[]>([]);
 
-	// Refs for keyboard scrolling
-	const scrollViewRef = useRef<ScrollView>(null);
-	const inputRef = useRef<View>(null);
 	const promptInputRef = useRef<TextInput>(null);
 	const hasEditedPromptRef = useRef(false);
 	const shouldJumpToTemplateRef = useRef(false);
-	const scrollYRef = useRef(0);
-	const [keyboardHeight, setKeyboardHeight] = useState(0);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const { height: viewportHeight } = useWindowDimensions();
@@ -521,47 +517,6 @@ export default function QuestScreen() {
 		setBeginnerSlotValues(values);
 	}, []);
 
-	// Keyboard handling - keep input visible and avoid unexpected dismissals
-	useEffect(() => {
-		const keyboardWillShowListener = Keyboard.addListener(
-			Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-			(event) => {
-				const nextKeyboardHeight = event?.endCoordinates?.height ?? 0;
-				setKeyboardHeight(nextKeyboardHeight);
-
-				requestAnimationFrame(() => {
-					if (!inputRef.current || !scrollViewRef.current) return;
-
-					inputRef.current.measureInWindow((_x, y, _width, height) => {
-						const inputBottom = y + height;
-						const keyboardTop = screenHeight - nextKeyboardHeight;
-						const safePadding = 24;
-
-						if (inputBottom > keyboardTop - safePadding) {
-							const overlap = inputBottom - (keyboardTop - safePadding);
-							scrollViewRef.current?.scrollTo({
-								y: Math.max(0, scrollYRef.current + overlap),
-								animated: true,
-							});
-						}
-					});
-				});
-			},
-		);
-
-		const keyboardWillHideListener = Keyboard.addListener(
-			Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-			() => {
-				setKeyboardHeight(0);
-			},
-		);
-
-		return () => {
-			keyboardWillShowListener.remove();
-			keyboardWillHideListener.remove();
-		};
-	}, []);
-
 	const handleGetHint = useCallback(async () => {
 		if (!level || isLoadingHint || hintCooldown > 0) return;
 		if (!canAffordHint) {
@@ -692,6 +647,7 @@ export default function QuestScreen() {
 				setLastScore(finalScore);
 				setFeedback(evaluation.feedback || []);
 				setMatchedKeywords(evaluation.keywordsMatched || []);
+				setPromptQuality((evaluation as any).promptQualityScore ?? null);
 
 				try {
 					if (user?.id) {
@@ -765,9 +721,15 @@ export default function QuestScreen() {
 					if (shouldAwardXp) await addXP(quest?.xpReward || 50);
 					setQuest((q: any) => (q ? { ...q, completed: true } : q));
 					if (quest) setCurrentQuest({ ...quest, completed: true });
-					setShowResult(true);
+					setPhase("result");
+					setSnapIndex(2);
+					Keyboard.dismiss();
 				} else {
-					await loseLife();
+					// A life is charged when the player chooses "Try again", not on the
+					// failed attempt itself, so show the result either way.
+					setPhase("result");
+					setSnapIndex(2);
+					Keyboard.dismiss();
 				}
 			} else if (level.type === "code") {
 				setGeneratedCode(null);
@@ -824,6 +786,7 @@ export default function QuestScreen() {
 
 				setLastScore(finalScore);
 				setFeedback(evaluation.feedback || []);
+				setPromptQuality((evaluation as any).promptQualityScore ?? null);
 				const testResults = normalizeCodeTestResults(evaluation.testResults);
 				setCodeExecutionResult({
 					code: generatedCodeText,
@@ -927,9 +890,15 @@ export default function QuestScreen() {
 					if (shouldAwardXp) await addXP(quest?.xpReward || 50);
 					setQuest((q: any) => (q ? { ...q, completed: true } : q));
 					if (quest) setCurrentQuest({ ...quest, completed: true });
-					setShowResult(true);
+					setPhase("result");
+					setSnapIndex(2);
+					Keyboard.dismiss();
 				} else {
-					await loseLife();
+					// A life is charged when the player chooses "Try again", not on the
+					// failed attempt itself, so show the result either way.
+					setPhase("result");
+					setSnapIndex(2);
+					Keyboard.dismiss();
 				}
 			} else if (level.type === "copywriting") {
 				const copyGenerationPrompt = [
@@ -970,6 +939,7 @@ export default function QuestScreen() {
 				setLastScore(finalScore);
 				setFeedback(copyScoringResult.feedback || []);
 				setCopyScoringResult(copyScoringResult);
+				setPromptQuality((copyScoringResult as any).promptQualityScore ?? null);
 
 				try {
 					if (user?.id) {
@@ -1048,9 +1018,15 @@ export default function QuestScreen() {
 					if (shouldAwardXp) await addXP(quest?.xpReward || 50);
 					setQuest((q: any) => (q ? { ...q, completed: true } : q));
 					if (quest) setCurrentQuest({ ...quest, completed: true });
-					setShowResult(true);
+					setPhase("result");
+					setSnapIndex(2);
+					Keyboard.dismiss();
 				} else {
-					await loseLife();
+					// A life is charged when the player chooses "Try again", not on the
+					// failed attempt itself, so show the result either way.
+					setPhase("result");
+					setSnapIndex(2);
+					Keyboard.dismiss();
 				}
 			}
 		} catch (error: any) {
@@ -1071,79 +1047,509 @@ export default function QuestScreen() {
 		}
 	};
 
-	const renderNewHeader = () => {
-		const totalLives = 3;
+	// Preview of what the player's prompt produced (shown in the result phase).
+	const renderBuiltPreview = () => {
+		if (!level) return null;
+		if (level.type === "image") {
+			return generatedImage ? (
+				<Image
+					source={{ uri: generatedImage }}
+					style={{ width: "100%", height: 200, borderRadius: 16 }}
+					resizeMode="cover"
+				/>
+			) : null;
+		}
+		if (level.type === "code") {
+			return generatedCode ? (
+				<View
+					style={{ borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "#EFEFEF" }}
+				>
+					<HtmlPreview html={generatedCode} height={200} animateIn={false} />
+				</View>
+			) : null;
+		}
+		if (level.type === "copywriting") {
+			return generatedCopy ? (
+				<ScrollView
+					style={{ maxHeight: 220 }}
+					showsVerticalScrollIndicator={false}
+					nestedScrollEnabled
+				>
+					<Text className="text-[15px] leading-6" style={{ color: "#3C3C3C" }}>
+						{generatedCopy}
+					</Text>
+				</ScrollView>
+			) : null;
+		}
+		return null;
+	};
 
-		return (
-			<SafeAreaView className="bg-white" edges={["top"]}>
-				<View className="px-6 py-4 flex-row items-center justify-between">
-					<TouchableOpacity onPress={goBackOrHome} className="mr-4">
-						<Ionicons name="chevron-back" size={28} color="#000" />
-					</TouchableOpacity>
+	// "Try again" — available on both pass and fail. Spends a heart, resets the
+	// attempt (keeping the player's prompt so they can refine it), and returns the
+	// sheet to its prompt phase.
+	const handleTryAgain = async () => {
+		if (livesAvailable <= 0) {
+			Alert.alert(
+				"Out of hearts",
+				"You're out of hearts for now. Head back to the path and come back soon.",
+			);
+			return;
+		}
+		await loseLife();
+		setGeneratedImage(null);
+		setGeneratedCode(null);
+		setGeneratedCopy(null);
+		setCodeExecutionResult(null);
+		setCopyScoringResult(null);
+		setLastScore(null);
+		setPromptQuality(null);
+		setFeedback([]);
+		setMatchedKeywords([]);
+		setActiveTab("target");
+		setQuest((q: any) => (q ? { ...q, completed: false } : q));
+		setPhase("prompt");
+		setSnapIndex(1);
+	};
 
-					{/* Progress Bar Container */}
-					<View className="flex-1 h-3 bg-surfaceVariant/30 rounded-full overflow-hidden mr-4">
-						<View
-							style={{ width: `${headerProgressPercent}%` }}
-							className="h-full bg-success rounded-full"
-						/>
+	const handleNextLevel = () => {
+		router.replace("/(tabs)/");
+	};
+
+	// Option B layout: target pinned to the top, draggable sheet holds the prompt
+	// (and, after submit, the result) — the sheet just grows; nothing navigates away.
+	const renderChallenge = () => {
+		if (!level) return null;
+
+		// Sheet snap points (fractions of screen height): a low peek that all but hides
+		// the sheet (handle only — footer hidden) so the back is fully visible, a
+		// comfortable mid height, and near-full. The back scrolls under the peeked sheet.
+		const sheetSnapPoints = [0.1, 0.4, 0.94];
+		// Pad the back's scroll by the *current* sheet height so the target can always
+		// be scrolled fully clear of the sheet and stays put (no rubber-band snap-back).
+		const backScrollPadBottom =
+			Math.round(
+				viewportHeight *
+					sheetSnapPoints[Math.min(snapIndex, sheetSnapPoints.length - 1)],
+			) + 32;
+		const passed = lastScore != null && lastScore >= (level.passingScore ?? 70);
+		const rewardXp = quest?.xpReward || level.points || 50;
+		const categoryLabel = (level.type || "code").toUpperCase();
+		const levelNum = level.order || 1;
+		const totalHearts = 3;
+
+		const hintLabel = noHintsLeft
+			? "No hints left"
+			: !canAffordHint
+				? `Need ${HINT_XP_COST} XP`
+				: hintCooldown > 0
+					? `${hintCooldown}s`
+					: isLoadingHint
+						? "Loading…"
+						: `Hint · ${HINT_XP_COST} XP`;
+		const hintDisabled =
+			isLoadingHint || hintCooldown > 0 || noHintsLeft || !canAffordHint;
+		const submitDisabled =
+			isGenerating || !prompt.trim() || (beginnerLocked && !beginnerSlotsFilled);
+
+		const promptFooter = (
+			<View className="flex-row items-center justify-between">
+				<View>
+					<Text
+						className="text-[10px] font-black uppercase tracking-widest mb-0.5"
+						style={{ color: "#999999" }}
+					>
+						Reward
+					</Text>
+					<View className="flex-row items-center">
+						<Text className="text-[18px] font-black" style={{ color: "#FF9600" }}>
+							+{rewardXp} XP
+						</Text>
+						<Ionicons name="flash" size={16} color="#FF9600" style={{ marginLeft: 4 }} />
 					</View>
+				</View>
+				<TouchableOpacity
+					onPress={handleGenerate}
+					disabled={submitDisabled}
+					activeOpacity={0.85}
+					accessibilityRole="button"
+					className="flex-row items-center"
+					style={{
+						backgroundColor: submitDisabled ? "#AFAFAF" : "#58CC02",
+						borderBottomWidth: 4,
+						borderBottomColor: submitDisabled ? "#8E8E8E" : "#46A302",
+						borderRadius: 16,
+						paddingHorizontal: 24,
+						paddingVertical: 13,
+					}}
+				>
+					<Text className="text-white text-[15px] font-black uppercase tracking-widest mr-2">
+						{isGenerating ? "Submitting…" : "Submit prompt"}
+					</Text>
+					{!isGenerating ? (
+						<Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+					) : null}
+				</TouchableOpacity>
+			</View>
+		);
 
-					{/* Hearts Container */}
-					<View className="flex-row gap-1">
-						{[...Array(totalLives)].map((_, i) => (
+		const resultFooter = (
+			<View className="flex-row items-center" style={{ gap: 12 }}>
+				<TouchableOpacity
+					onPress={passed ? handleTryAgain : handleNextLevel}
+					activeOpacity={0.85}
+					accessibilityRole="button"
+					className="flex-1 items-center justify-center"
+					style={{
+						backgroundColor: "#FFFFFF",
+						borderWidth: 2,
+						borderColor: "#E5E5E5",
+						borderBottomWidth: 4,
+						borderBottomColor: "#E5E5E5",
+						borderRadius: 16,
+						paddingVertical: 12,
+					}}
+				>
+					<Text
+						className="text-[15px] font-black uppercase tracking-widest"
+						style={{ color: "#777777" }}
+					>
+						{passed ? "Try again" : "Back"}
+					</Text>
+				</TouchableOpacity>
+				<TouchableOpacity
+					onPress={passed ? handleNextLevel : handleTryAgain}
+					activeOpacity={0.85}
+					accessibilityRole="button"
+					className="flex-1 items-center justify-center"
+					style={{
+						backgroundColor: "#58CC02",
+						borderBottomWidth: 4,
+						borderBottomColor: "#46A302",
+						borderRadius: 16,
+						paddingVertical: 14,
+					}}
+				>
+					<Text className="text-white text-[15px] font-black uppercase tracking-widest">
+						{passed ? "Next level" : "Try again"}
+					</Text>
+				</TouchableOpacity>
+			</View>
+		);
+
+		const promptBody = (
+			<View>
+				<View className="flex-row items-center justify-between mb-3">
+					<Text
+						className="text-[13px] font-black uppercase tracking-widest"
+						style={{ color: "#8E8E93" }}
+					>
+						Your Prompt
+					</Text>
+					<TouchableOpacity
+						onPress={handleGetHint}
+						disabled={hintDisabled}
+						activeOpacity={0.85}
+						accessibilityRole="button"
+						className="flex-row items-center px-3 py-1.5 rounded-full"
+						style={{ backgroundColor: hintDisabled ? "#F2F2F2" : "#FFF4E5" }}
+					>
+						{isLoadingHint ? (
+							<ActivityIndicator size="small" color="#FF9600" />
+						) : (
 							<Ionicons
-								key={i}
-								name="heart"
-								size={24}
-								color={i < livesAvailable ? "#FF9600" : "#E5E5E5"}
+								name="bulb"
+								size={14}
+								color={hintDisabled ? "#B0B0B0" : "#FF9600"}
+								style={{ marginRight: 4 }}
 							/>
+						)}
+						<Text
+							className="text-[12px] font-black"
+							style={{ color: hintDisabled ? "#B0B0B0" : "#FF9600" }}
+						>
+							{hintLabel}
+						</Text>
+					</TouchableOpacity>
+				</View>
+
+				<QuestPromptInputCard
+					prompt={prompt}
+					onChangePrompt={handlePromptChange}
+					promptPlaceholder="Describe what you want to build…"
+					scaffoldType={level.scaffoldType}
+					scaffoldTemplate={level.scaffoldTemplate}
+					beginnerTemplateLocked={beginnerLocked}
+					onBeginnerTemplateSlotsFilledChange={handleBeginnerSlotsFilledChange}
+					onBeginnerSlotValuesJoinedChange={handleBeginnerSlotValuesJoined}
+					onBeginnerSlotValuesArrayChange={handleBeginnerSlotValuesArray}
+					checklistItems={checklistItems}
+					matchedChecklistItems={matchedChecklistItems}
+					inputRef={promptInputRef}
+					onPromptFocus={handlePromptFocus}
+					inputAccessoryViewID={Platform.OS === "ios" ? inputAccessoryId : undefined}
+				/>
+
+				{hints.length > 0 ? (
+					<View
+						className="mt-4 rounded-2xl p-4"
+						style={{ backgroundColor: "#FFF9EE", borderWidth: 1, borderColor: "#FFE6BF" }}
+					>
+						<Text
+							className="text-[10px] font-black uppercase tracking-widest mb-2"
+							style={{ color: "#FF9600" }}
+						>
+							Hints
+						</Text>
+						{hints.map((hint, index) => (
+							<View key={index} className="flex-row mb-1">
+								<Text className="mr-2 text-[13px] font-black" style={{ color: "#FF9600" }}>
+									{index + 1}.
+								</Text>
+								<Text className="flex-1 text-[14px] leading-5" style={{ color: "#3C3C3C" }}>
+									{hint}
+								</Text>
+							</View>
 						))}
 					</View>
-				</View>
-			</SafeAreaView>
-		);
-	};
-
-	const renderBadge = () => {
-		const category = level?.type?.toUpperCase() || "CODING";
-		const levelNum = level?.order || 1;
-		return (
-			<View className="px-6 items-center mt-2 mb-4">
-				<View className="bg-[#EAF8E1] px-4 py-1.5 rounded-full flex-row items-center">
-					<Text className="text-[#58CC02] text-xs font-black tracking-widest">
-						LEVEL {levelNum}  •  {category}
-					</Text>
-				</View>
+				) : null}
 			</View>
 		);
-	};
 
-	const renderFooter = () => (
-		<View className="bg-white border-t border-outline/10 px-6 py-6 pb-10 flex-row items-center justify-between">
+		const resultBody = (
 			<View>
-				<Text className="text-onSurfaceVariant text-[10px] font-black uppercase tracking-widest mb-1">
-					REWARD
-				</Text>
-				<View className="flex-row items-center">
-					<Text className="text-[#FF9600] text-xl font-black">+{quest?.xpReward || 250} XP</Text>
-					<Text className="text-[#FF9600] text-xl ml-1">⚡</Text>
+				<View className="flex-row items-center justify-between mb-4">
+					<Text className="text-[22px] font-black" style={{ color: "#3C3C3C" }}>
+						Your result
+					</Text>
+					{passed ? (
+						<View
+							className="flex-row items-center px-3 py-1.5 rounded-full"
+							style={{ backgroundColor: "#FFF4E5" }}
+						>
+							<Ionicons name="flash" size={14} color="#FF9600" style={{ marginRight: 4 }} />
+							<Text className="text-[14px] font-black" style={{ color: "#FF9600" }}>
+								+{rewardXp} XP
+							</Text>
+						</View>
+					) : (
+						<View className="px-3 py-1.5 rounded-full" style={{ backgroundColor: "#FDECEC" }}>
+							<Text
+								className="text-[11px] font-black uppercase tracking-widest"
+								style={{ color: "#E53935" }}
+							>
+								Not passed
+							</Text>
+						</View>
+					)}
 				</View>
-			</View>
-			<TouchableOpacity
-				onPress={handleGenerate}
-				disabled={isGenerating || quest?.completed || (beginnerLocked && !beginnerSlotsFilled)}
-				className={`flex-row items-center px-8 py-4 rounded-2xl ${
-					isGenerating ? "bg-success/50" : "bg-success shadow-sm"
-				}`}
-			>
-				<Text className="text-white text-base font-black uppercase tracking-widest mr-2">
-					{isGenerating ? "SUBMITTING..." : "SUBMIT PROMPT"}
+
+				<Text
+					className="text-[12px] font-black uppercase tracking-widest mb-2"
+					style={{ color: "#8E8E93" }}
+				>
+					What you built
 				</Text>
-				{!isGenerating && <Ionicons name="chevron-forward" size={20} color="white" />}
-			</TouchableOpacity>
-		</View>
-	);
+				<View
+					className="rounded-2xl p-3 mb-5"
+					style={{ backgroundColor: "#F7F7F7", borderWidth: 1, borderColor: "#EFEFEF" }}
+				>
+					{renderBuiltPreview()}
+				</View>
+
+				<ChallengeScoreBar label="Task match" value={lastScore ?? 0} color="#58CC02" />
+				<ChallengeScoreBar
+					label="Prompt quality"
+					value={promptQuality ?? 0}
+					color="#FF9600"
+					delay={120}
+				/>
+
+				{feedback.length > 0 ? (
+					<View className="mt-2">
+						<Text
+							className="text-[12px] font-black uppercase tracking-widest mb-2"
+							style={{ color: "#8E8E93" }}
+						>
+							Feedback
+						</Text>
+						{feedback.slice(0, 4).map((line, index) => (
+							<View key={index} className="flex-row mb-1.5">
+								<Text className="mr-2" style={{ color: passed ? "#58CC02" : "#FF9600" }}>
+									•
+								</Text>
+								<Text className="flex-1 text-[14px] leading-5" style={{ color: "#3C3C3C" }}>
+									{line}
+								</Text>
+							</View>
+						))}
+					</View>
+				) : null}
+			</View>
+		);
+
+		return (
+			<View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+				<SafeAreaView edges={["top"]} style={{ flex: 1 }}>
+					<View style={{ flex: 1 }}>
+						<View className="px-5 pt-1 pb-3 flex-row items-center">
+							<TouchableOpacity
+								onPress={goBackOrHome}
+								className="mr-3"
+								accessibilityRole="button"
+								accessibilityLabel="Close challenge"
+							>
+								<Ionicons name="close" size={28} color="#3C3C3C" />
+							</TouchableOpacity>
+							<View
+								className="flex-1 mr-3 overflow-hidden"
+								style={{ height: 12, backgroundColor: "#F0F0F0", borderRadius: 6 }}
+							>
+								<View
+									style={{
+										height: "100%",
+										width: `${headerProgressPercent}%`,
+										backgroundColor: "#58CC02",
+										borderRadius: 6,
+									}}
+								/>
+							</View>
+							<View className="flex-row">
+								{[...Array(totalHearts)].map((_, index) => (
+									<Ionicons
+										key={index}
+										name="heart"
+										size={22}
+										color={index < livesAvailable ? "#FF9600" : "#E5E5E5"}
+										style={{ marginLeft: 3 }}
+									/>
+								))}
+							</View>
+						</View>
+
+						<ScrollView
+							style={{ flex: 1 }}
+							contentContainerStyle={{ paddingBottom: backScrollPadBottom }}
+							showsVerticalScrollIndicator={false}
+							removeClippedSubviews={false}
+						>
+							<View className="px-6 mb-2">
+								<View
+									className="self-start px-3 py-1.5 rounded-full mb-2"
+									style={{ backgroundColor: "#E8F7DD" }}
+								>
+									<Text className="text-[11px] font-black tracking-widest" style={{ color: "#58CC02" }}>
+										LEVEL {levelNum}  •  {categoryLabel}
+									</Text>
+								</View>
+								<Text
+									className="text-[22px] font-black leading-7"
+									style={{ color: "#3C3C3C" }}
+									numberOfLines={2}
+								>
+									{level.title}
+								</Text>
+								{level.description ? (
+									<Text className="text-[14px] mt-1 leading-5" style={{ color: "#777777" }}>
+										{level.description}
+									</Text>
+								) : null}
+							</View>
+
+							<View className="px-5" style={{ marginTop: 6 }}>
+								<View
+									style={{
+										height: targetPreviewHeight,
+										borderRadius: 24,
+										overflow: "hidden",
+										backgroundColor: "#F7F7F7",
+										borderWidth: 1,
+										borderColor: "#EFEFEF",
+									}}
+								>
+									<View style={{ flex: 1 }}>{renderLessonTarget()}</View>
+								</View>
+								<TouchableOpacity
+									onPress={() => setTargetExpanded(true)}
+									activeOpacity={0.85}
+									accessibilityRole="button"
+									accessibilityLabel="Expand target"
+									className="absolute items-center justify-center"
+									style={{
+										right: 24,
+										bottom: 14,
+										width: 40,
+										height: 40,
+										borderRadius: 20,
+										backgroundColor: "#FFFFFF",
+										borderWidth: 1,
+										borderColor: "#EFEFEF",
+										shadowColor: "#000000",
+										shadowOffset: { width: 0, height: 2 },
+										shadowOpacity: 0.12,
+										shadowRadius: 6,
+										elevation: 4,
+									}}
+								>
+									<Ionicons name="expand" size={18} color="#3C3C3C" />
+								</TouchableOpacity>
+							</View>
+						</ScrollView>
+					</View>
+				</SafeAreaView>
+
+				<ChallengeBottomSheet
+					snapPoints={sheetSnapPoints}
+					snapIndex={snapIndex}
+					onSnapIndexChange={setSnapIndex}
+					hideFooterBelowIndex={1}
+					footer={phase === "result" ? resultFooter : promptFooter}
+				>
+					{phase === "result" ? resultBody : promptBody}
+				</ChallengeBottomSheet>
+
+				<TargetExpandModal
+					visible={targetExpanded}
+					onClose={() => setTargetExpanded(false)}
+					title="Target"
+				>
+					{level.type === "image" && level.targetImageUrl ? (
+						<TargetImageView
+							source={
+								typeof level.targetImageUrl === "number"
+									? level.targetImageUrl
+									: { uri: level.targetImageUrl as string }
+							}
+							className="flex-1 rounded-2xl"
+						/>
+					) : (
+						<View style={{ flex: 1 }}>{renderLessonTarget()}</View>
+					)}
+				</TargetExpandModal>
+
+				{Platform.OS === "ios" ? (
+					<InputAccessoryView nativeID={inputAccessoryId}>
+						<View
+							className="px-4 py-2 flex-row justify-end"
+							style={{ backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#F0F0F0" }}
+						>
+							<TouchableOpacity
+								onPress={Keyboard.dismiss}
+								className="px-4 py-2 rounded-full"
+								style={{ backgroundColor: "#EAF8E1" }}
+							>
+								<Text
+									className="text-[12px] font-black uppercase tracking-widest"
+									style={{ color: "#58CC02" }}
+								>
+									Done
+								</Text>
+							</TouchableOpacity>
+						</View>
+					</InputAccessoryView>
+				) : null}
+			</View>
+		);
+	};
 
 	const renderLessonTarget = () => {
 		if (!level) return null;
@@ -1195,6 +1601,7 @@ export default function QuestScreen() {
 						(hasMeaningfulHtmlPreview(starterCode) ? starterCode ?? "" : "")
 					}
 					height={targetPreviewHeight}
+					animateIn={false}
 				/>
 			);
 		}
@@ -1254,134 +1661,6 @@ export default function QuestScreen() {
 		);
 	};
 
-	const renderNewUI = () => (
-		<View className="flex-1 bg-white">
-			{renderNewHeader()}
-
-			<KeyboardAvoidingView
-				className="flex-1"
-				behavior={Platform.OS === "ios" ? "padding" : "height"}
-				keyboardVerticalOffset={0}
-			>
-				<ScrollView
-					ref={scrollViewRef}
-					className="flex-1"
-					showsVerticalScrollIndicator={false}
-					contentContainerStyle={{ paddingBottom: 20 }}
-				>
-					{renderBadge()}
-
-					<View className="px-6 items-center mb-8">
-						<Text className="text-onSurface text-[40px] font-black text-center leading-tight mb-2">
-							{level?.title}
-						</Text>
-						<Text className="text-onSurfaceVariant text-base font-medium text-center px-4 leading-6">
-							{level?.description}
-						</Text>
-					</View>
-
-					{/* Target Card Wrapper */}
-					<View className="px-6 mb-8">
-						<Card className="p-6 rounded-[32px] border border-outline/10 shadow-sm bg-white overflow-hidden">
-							<Text className="text-onSurface text-base font-black text-center mb-6">
-								Match This Exactly
-							</Text>
-
-							<View
-								className="w-full rounded-2xl bg-surfaceVariant/5 overflow-hidden"
-								style={{ minHeight: 220, height: targetPreviewHeight }}
-							>
-								<View className="w-full h-full">
-									{renderLessonTarget()}
-								</View>
-							</View>
-						</Card>
-					</View>
-
-					{/* Optimal Length & Tags */}
-					<View className="px-6 mb-4">
-						<Text className="text-[#3C3C3C] text-sm font-medium mb-4">
-							Optimal Length: 12-20 words
-						</Text>
-
-						<View className="flex-row gap-2 mb-6">
-							{["IDENTITY", "CONTEXT", "CONSTRAINT"].map((tag) => {
-								const isMet = matchedChecklistItems.includes(tag);
-								return (
-									<View
-										key={tag}
-										className={`flex-row items-center px-4 py-2 rounded-full border ${
-											isMet ? "border-[#E5E5E5] bg-white" : "border-outline/20 bg-surfaceVariant/5"
-										}`}
-									>
-										{isMet && <Ionicons name="checkmark" size={14} color="#58CC02" style={{ marginRight: 4 }} />}
-										<Text className={`text-[11px] font-black tracking-widest ${isMet ? "text-[#3C3C3C]" : "text-onSurfaceVariant"}`}>
-											{tag}
-										</Text>
-									</View>
-								);
-							})}
-						</View>
-
-						{/* Prompt Area */}
-						<Text className="text-[#8E8E93] text-sm font-bold mb-4">
-							Your Prompt
-						</Text>
-
-						<QuestPromptInputCard
-							prompt={prompt}
-							onChangePrompt={handlePromptChange}
-							promptPlaceholder="e.g., Create a pill-shaped button with a cyan..."
-							scaffoldType={level.scaffoldType}
-							scaffoldTemplate={level.scaffoldTemplate}
-							beginnerTemplateLocked={beginnerLocked}
-							onBeginnerTemplateSlotsFilledChange={handleBeginnerSlotsFilledChange}
-							onBeginnerSlotValuesJoinedChange={handleBeginnerSlotValuesJoined}
-							onBeginnerSlotValuesArrayChange={handleBeginnerSlotValuesArray}
-							checklistItems={checklistItems}
-							matchedChecklistItems={matchedChecklistItems}
-							inputRef={promptInputRef}
-							onPromptFocus={handlePromptFocus}
-							inputAccessoryViewID={
-								Platform.OS === "ios" ? inputAccessoryId : undefined
-							}
-						/>
-					</View>
-
-					{/* Results Feedback (if any) */}
-					{lastScore !== null && (
-						<View className="px-6 mt-4">
-							<Card className={`p-4 rounded-2xl border ${lastScore >= level.passingScore ? "border-success/30 bg-success/5" : "border-error/30 bg-error/5"}`}>
-								<View className="flex-row items-center justify-between">
-									<Text className="font-bold">Score: {lastScore}%</Text>
-									<Ionicons
-										name={lastScore >= level.passingScore ? "checkmark-circle" : "alert-circle"}
-										size={20}
-										color={lastScore >= level.passingScore ? "#58CC02" : "#EF4444"}
-									/>
-								</View>
-							</Card>
-						</View>
-					)}
-				</ScrollView>
-			</KeyboardAvoidingView>
-
-			{renderFooter()}
-
-			<ResultModal
-				visible={showResult}
-				score={lastScore || 0}
-				xp={quest?.xpReward || 250}
-				moduleType={level.type}
-				onNext={() => {
-					setShowResult(false);
-					router.replace("/(tabs)/");
-				}}
-				onClose={() => setShowResult(false)}
-			/>
-		</View>
-	);
-
 	// Final screen state routing
 	if (isLoading) {
 		return (
@@ -1402,5 +1681,5 @@ export default function QuestScreen() {
 		);
 	}
 
-	return renderNewUI();
+	return renderChallenge();
 }

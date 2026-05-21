@@ -48,11 +48,6 @@ export default function SignUpScreen() {
 
 	useWarmUpBrowser();
 
-	// If already signed in (e.g. from race with tabs redirect), go straight to app
-	if (isAuthLoaded && isSignedIn) {
-		return <Redirect href="/(tabs)" />;
-	}
-
 	const [firstName, setFirstName] = React.useState("");
 	const [lastName, setLastName] = React.useState("");
 	const [emailAddress, setEmailAddress] = React.useState("");
@@ -399,6 +394,29 @@ export default function SignUpScreen() {
 		}
 	}, [isOAuthLoading, router, startAppleAuthenticationFlow, startSSOFlow]);
 
+	React.useEffect(() => {
+		if (isAuthLoaded && isSignedIn) {
+			router.replace("/(tabs)");
+		}
+	}, [isAuthLoaded, isSignedIn, router]);
+
+	// All hooks are declared above; safe to early-return now (Rules of Hooks).
+	// If already signed in, render inert UI while the effect navigates.
+	if (isAuthLoaded && isSignedIn) {
+		return (
+			<View
+				style={{
+					flex: 1,
+					alignItems: "center",
+					justifyContent: "center",
+					backgroundColor: "#FFFFFF",
+				}}
+			>
+				<ActivityIndicator color="#4151FF" />
+			</View>
+		);
+	}
+
 	if (pendingVerification) {
 		return (
 			<SafeAreaView className="flex-1 bg-background">
@@ -414,7 +432,7 @@ export default function SignUpScreen() {
 					>
 						{/* Header */}
 						<View className="mb-8 items-center">
-							<View className="mb-5 h-16 w-16 items-center justify-center rounded-[24px] border border-info/20 bg-info/10 shadow-lg shadow-info/15">
+							<View className="mb-5 h-16 w-16 items-center justify-center rounded-[24px] border border-info/20 bg-info/10">
 								<Ionicons name="mail-unread" size={32} color="#4151FF" />
 							</View>
 							<Text className="mb-2 text-3xl font-black tracking-tight text-onSurface">
@@ -429,7 +447,7 @@ export default function SignUpScreen() {
 						</View>
 
 						{/* Verification Form */}
-						<View className="mb-8 w-full self-center rounded-[28px] border border-outline/15 bg-surface px-6 py-7 shadow-2xl shadow-black/30">
+						<View className="mb-8 w-full self-center rounded-[28px] border border-outline/15 bg-surface px-6 py-7">
 							{errors.general && (
 								<View className="mb-5 rounded-[18px] border border-error/25 bg-error/8 px-4 py-3">
 									<Text className="text-center text-[11px] font-semibold leading-4 text-error">
@@ -443,7 +461,12 @@ export default function SignUpScreen() {
 									Enter 6-digit code
 								</Text>
 								<View
-									className={`h-20 items-center justify-center rounded-[22px] border bg-surfaceVariant/45 px-4 ${errors.code ? "border-error" : "border-outline/25"}`}
+									className="h-20 items-center justify-center rounded-[22px] border bg-surfaceVariant/45 px-4"
+									style={{
+										borderColor: errors.code
+											? "#EF4444"
+											: "rgba(156, 163, 175, 0.25)",
+									}}
 								>
 									<TextInput
 										className="w-full text-center text-[34px] font-black tracking-[8px] text-onSurface"
@@ -471,7 +494,8 @@ export default function SignUpScreen() {
 							<TouchableOpacity
 								onPress={onVerifyPress}
 								disabled={isLoading}
-								className={`h-14 items-center justify-center rounded-[18px] bg-primary shadow-lg shadow-primary/20 ${isLoading ? "opacity-70" : ""}`}
+								className="h-14 items-center justify-center rounded-[18px] bg-primary"
+								style={{ opacity: isLoading ? 0.7 : 1 }}
 							>
 								{isLoading ? (
 									<ActivityIndicator color="white" />
@@ -526,7 +550,7 @@ export default function SignUpScreen() {
 					</View>
 
 					{/* Sign Up Form */}
-					<View className="mb-4 w-full self-center rounded-[28px] border border-outline/15 bg-surface px-6 py-7 shadow-2xl shadow-black/30">
+					<View className="mb-4 w-full self-center rounded-[28px] border border-outline/15 bg-surface px-6 py-7">
 						<Text className="mb-2 text-center text-[28px] font-black tracking-tight text-onSurface">
 							Sign Up
 						</Text>
@@ -636,7 +660,8 @@ export default function SignUpScreen() {
 							<TouchableOpacity
 								onPress={() => handleOAuthSignUp()}
 								disabled={!!isOAuthLoading}
-								className={`h-14 flex-row items-center justify-center rounded-[18px] border border-outline/25 bg-white shadow-lg ${isOAuthLoading ? "opacity-70" : ""}`}
+								className="h-14 flex-row items-center justify-center rounded-[18px] border border-outline/25 bg-white"
+								style={{ opacity: isOAuthLoading ? 0.7 : 1 }}
 							>
 								{isOAuthLoading === "google" ? (
 									<ActivityIndicator color="#4285F4" size="small" />
@@ -654,7 +679,8 @@ export default function SignUpScreen() {
 								<TouchableOpacity
 									onPress={handleAppleSignUp}
 									disabled={!!isOAuthLoading}
-									className={`mt-3 h-14 flex-row items-center justify-center rounded-[18px] border border-white/10 bg-black shadow-lg ${isOAuthLoading ? "opacity-70" : ""}`}
+									className="mt-3 h-14 flex-row items-center justify-center rounded-[18px] border border-white/10 bg-black"
+									style={{ opacity: isOAuthLoading ? 0.7 : 1 }}
 								>
 									{isOAuthLoading === "apple" ? (
 										<ActivityIndicator color="#FFFFFF" size="small" />
@@ -673,7 +699,8 @@ export default function SignUpScreen() {
 						<TouchableOpacity
 							onPress={onSignUpPress}
 							disabled={isLoading}
-							className={`mt-6 h-14 items-center justify-center rounded-[18px] bg-secondary shadow-lg shadow-secondary/20 ${isLoading ? "opacity-70" : ""}`}
+							className="mt-6 h-14 items-center justify-center rounded-[18px] bg-secondary"
+							style={{ opacity: isLoading ? 0.7 : 1 }}
 						>
 							{isLoading ? (
 								<ActivityIndicator color="white" />

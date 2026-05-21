@@ -46,11 +46,6 @@ export default function SignInScreen() {
 
 	useWarmUpBrowser();
 
-	// If already signed in (e.g. from race with tabs redirect), go straight to app
-	if (isAuthLoaded && isSignedIn) {
-		return <Redirect href="/(tabs)" />;
-	}
-
 	const [emailAddress, setEmailAddress] = useState("");
 	const [password, setPassword] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
@@ -286,6 +281,29 @@ export default function SignInScreen() {
 		}
 	}, [isOAuthLoading, router, startAppleAuthenticationFlow, startSSOFlow]);
 
+	useEffect(() => {
+		if (isAuthLoaded && isSignedIn) {
+			router.replace("/(tabs)");
+		}
+	}, [isAuthLoaded, isSignedIn, router]);
+
+	// All hooks are declared above; safe to early-return now (Rules of Hooks).
+	// If already signed in, render inert UI while the effect navigates.
+	if (isAuthLoaded && isSignedIn) {
+		return (
+			<View
+				style={{
+					flex: 1,
+					alignItems: "center",
+					justifyContent: "center",
+					backgroundColor: "#FFFFFF",
+				}}
+			>
+				<ActivityIndicator color="#FF6B00" />
+			</View>
+		);
+	}
+
 	return (
 		<SafeAreaView className="flex-1 bg-background">
 			<KeyboardAvoidingView behavior="padding" className="flex-1">
@@ -306,7 +324,7 @@ export default function SignInScreen() {
 					</View>
 
 					{/* Sign In Form */}
-					<View className="mb-4 w-full self-center rounded-[28px] border border-outline/15 bg-surface px-6 py-7 shadow-2xl shadow-black/30">
+					<View className="mb-4 w-full self-center rounded-[28px] border border-outline/15 bg-surface px-6 py-7">
 						<Text className="mb-2 text-center text-[28px] font-black tracking-tight text-onSurface">
 							Welcome Back
 						</Text>
@@ -374,7 +392,8 @@ export default function SignInScreen() {
 							<TouchableOpacity
 								onPress={() => handleOAuthSignIn()}
 								disabled={!!isOAuthLoading}
-								className={`h-14 flex-row items-center justify-center rounded-[18px] border border-outline/25 bg-white shadow-lg ${isOAuthLoading ? "opacity-70" : ""}`}
+								className="h-14 flex-row items-center justify-center rounded-[18px] border border-outline/25 bg-white"
+								style={{ opacity: isOAuthLoading ? 0.7 : 1 }}
 							>
 								{isOAuthLoading === "google" ? (
 									<ActivityIndicator color="#4285F4" size="small" />
@@ -392,7 +411,8 @@ export default function SignInScreen() {
 								<TouchableOpacity
 									onPress={handleAppleSignIn}
 									disabled={!!isOAuthLoading}
-									className={`mt-3 h-14 flex-row items-center justify-center rounded-[18px] border border-white/10 bg-black shadow-lg ${isOAuthLoading ? "opacity-70" : ""}`}
+									className="mt-3 h-14 flex-row items-center justify-center rounded-[18px] border border-white/10 bg-black"
+									style={{ opacity: isOAuthLoading ? 0.7 : 1 }}
 								>
 									{isOAuthLoading === "apple" ? (
 										<ActivityIndicator color="#FFFFFF" size="small" />
@@ -411,7 +431,8 @@ export default function SignInScreen() {
 						<TouchableOpacity
 							onPress={onSignInPress}
 							disabled={isLoading}
-							className={`mt-6 h-14 items-center justify-center rounded-[18px] bg-primary shadow-lg shadow-primary/20 ${isLoading ? "opacity-70" : ""}`}
+							className="mt-6 h-14 items-center justify-center rounded-[18px] bg-primary"
+							style={{ opacity: isLoading ? 0.7 : 1 }}
 						>
 							{isLoading ? (
 								<ActivityIndicator color="white" />
