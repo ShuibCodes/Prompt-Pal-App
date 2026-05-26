@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Text, ActivityIndicator, Dimensions } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Text, ActivityIndicator, Dimensions, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useClerk } from '@clerk/clerk-expo';
 import { XpIcon, StreakIcon } from '@/features/new-ui/components/CustomIcons';
 import { clearAuth } from "@/lib/convex-client";
+import { getLegalUrls } from "@/lib/subscriptions";
 import { logger } from "@/lib/logger";
 import { api } from "../../../convex/_generated/api";
 import { useRouter } from 'expo-router';
@@ -55,6 +56,14 @@ export default function ProfileScreen() {
     } catch (err) {
       logger.error("ProfileScreen.handleSignOut", err);
     }
+  };
+
+  const { termsOfUseUrl, privacyPolicyUrl } = getLegalUrls();
+  const openUrl = (url: string | null) => {
+    if (!url) return;
+    Linking.openURL(url).catch((err) =>
+      logger.error("ProfileScreen.openUrl", err),
+    );
   };
 
   if (!profile) {
@@ -168,6 +177,52 @@ export default function ProfileScreen() {
               <Text style={styles.emptyText}>No achievements yet. Keep learning!</Text>
             )}
           </ScrollView>
+        </View>
+
+        {/* Legal */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Legal</Text>
+          <TouchableOpacity
+            style={styles.legalRow}
+            onPress={() => openUrl(privacyPolicyUrl)}
+            accessibilityRole="button"
+            accessibilityLabel="Privacy Policy"
+          >
+            <View style={styles.legalRowIcon}>
+              <Ionicons name="shield-checkmark-outline" size={20} color="#58CC02" />
+            </View>
+            <Text style={styles.legalRowLabel}>Privacy Policy</Text>
+            <Ionicons name="open-outline" size={18} color="#CFCFCF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.legalRow, { marginTop: 10 }]}
+            onPress={() => openUrl(termsOfUseUrl)}
+            accessibilityRole="button"
+            accessibilityLabel="Terms and Conditions"
+          >
+            <View style={styles.legalRowIcon}>
+              <Ionicons name="document-text-outline" size={20} color="#58CC02" />
+            </View>
+            <Text style={styles.legalRowLabel}>Terms &amp; Conditions</Text>
+            <Ionicons name="open-outline" size={18} color="#CFCFCF" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Account */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          <TouchableOpacity
+            style={styles.deleteRow}
+            onPress={() => router.push("/delete-account")}
+            accessibilityRole="button"
+            accessibilityLabel="Delete account"
+          >
+            <View style={styles.deleteRowIcon}>
+              <Ionicons name="trash-outline" size={20} color="#FF4B4B" />
+            </View>
+            <Text style={styles.deleteRowLabel}>Delete Account</Text>
+            <Ionicons name="chevron-forward" size={20} color="#CFCFCF" />
+          </TouchableOpacity>
         </View>
 
         <View style={{ height: 100 }} />
@@ -410,5 +465,55 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     fontWeight: '600',
     fontStyle: 'italic',
+  },
+  legalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7F7F7',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#F0F0F0',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  legalRowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ECFFE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  legalRowLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#3C3C3C',
+  },
+  deleteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7F7F7',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#F0F0F0',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  deleteRowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFE9E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteRowLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FF4B4B',
   },
 });

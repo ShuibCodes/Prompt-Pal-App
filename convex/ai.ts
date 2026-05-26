@@ -16,6 +16,7 @@ import {
 	parseCopyMetrics,
 } from "../src/lib/scoring/copyScoringCore";
 import {
+	assessAgentPromptQuality,
 	assessCodePromptQuality,
 	assessCopyPromptQuality,
 	assessImagePromptQuality,
@@ -248,6 +249,20 @@ function normalizeImageEvaluation(raw: unknown): ImageEvaluation {
 			: [],
 		criteria,
 	};
+}
+
+/**
+ * Pull a JSON object out of an LLM response. Gemini frequently wraps JSON in
+ * ```json fences or adds prose, which breaks a raw JSON.parse — strip the fence
+ * (or fall back to the first {...} block) before parsing. Mirrors the logic in
+ * parseLlmJudgeResponse so the image judge behaves like the code/copy judge.
+ */
+function extractJsonText(text: string): string {
+	const fence = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+	if (fence?.[1]) return fence[1].trim();
+	const brace = text.match(/\{[\s\S]*\}/);
+	if (brace?.[0]) return brace[0].trim();
+	return text.trim();
 }
 
 async function refundQuotaUsage(
@@ -577,6 +592,185 @@ export const evaluateCodeSubmission = action({
 		};
 	},
 });
+
+/**
+ * Evaluate an AI Agent challenge submission.
+ *
+ * Mirrors the coding LLM-judge path, but there is NO generation step: the user's
+ * submitted prompt is judged directly against the level's hidden `whatUserSees`
+ * rubric and `grading.criteria`. Reuses parseLlmJudgeResponse / computeLlmJudgeScore.
+ */
+export const evaluateAgentSubmission = action({
+	args: {
+		levelId: v.string(),
+		userPrompt: v.string(),
+		agentBrief: v.optional(v.string()),
+		visibleHints: v.optional(v.array(v.string())),
+	},
+	handler: async (
+		ctx,
+		args,
+	): Promise<PromptEvaluationResult & { testResults: any[] }> => {
+		const identity = await ctx.auth.getUserIdentity();
+		if (!identity) throw new Error("Not authenticated");
+
+		if (args.userPrompt.length > MAX_PROMPT_LENGTH) {
+			throw new Error("Input too long");
+		}
+
+		const level = await ctx.runQuery(internal.queries.getLevelEvaluationData, {
+			id: args.levelId,
+		});
+		if (!level || level.type !== "agent") {
+			throw new Error("Agent level not found");
+		}
+
+		const visibleBrief = args.agentBrief ?? level.agentBrief;
+
+		const promptAssessment = assessAgentPromptQuality({
+			userPrompt: args.userPrompt,
+			// Only PUBLIC references — never the hidden whatUserSees rubric — so a
+			// user can't be penalised (or rewarded) for echoing the hidden answer.
+			publicReferences: [
+				visibleBrief,
+				level.title,
+				level.description,
+				...(args.visibleHints || []),
+			],
+			checklist: level.promptChecklist,
+		});
+
+		const grading = level.grading as
+			| {
+					method?: string;
+					criteria?: GradingCriterion[];
+					passingCondition?: string;
+			  }
+			| undefined;
+
+		if (!grading?.criteria?.length) {
+			throw new Error("Agent level is missing grading criteria");
+		}
+
+		const judgePrompt = buildAgentLlmJudgePrompt({
+			userPrompt: args.userPrompt,
+			agentBrief: visibleBrief,
+			whatUserSees: level.whatUserSees,
+			visibleHints: args.visibleHints,
+			criteria: grading.criteria,
+		});
+
+		const generated = await generateTextWithQuota(ctx, {
+			userId: identity.subject,
+			prompt: judgePrompt,
+			context:
+				"You are a strict reviewer of AI agent instructions. Judge the user's prompt only against the hidden rubric and the criteria, and respond only with valid JSON.",
+		});
+
+		const { passed, reasons } = parseLlmJudgeResponse(
+			generated.text,
+			grading.criteria,
+		);
+		const { score: criteriaScore } = computeLlmJudgeScore(
+			passed,
+			grading.criteria,
+			grading.passingCondition ?? "All required criteria pass",
+		);
+		const score = Math.round(
+			criteriaScore * 0.8 + promptAssessment.score * 0.2,
+		);
+
+		const failState = level.failState as { nudge?: string } | undefined;
+		const successState = level.successState as
+			| { feedback?: string }
+			| undefined;
+		const feedback: string[] = [];
+
+		if (score >= level.passingScore && successState?.feedback) {
+			feedback.push(successState.feedback);
+		} else if (score < level.passingScore && failState?.nudge) {
+			feedback.push(failState.nudge);
+		}
+
+		for (const criterion of grading.criteria) {
+			if (!passed[criterion.id] && reasons[criterion.id]) {
+				feedback.push(`${criterion.id}: ${reasons[criterion.id]}`);
+			}
+		}
+
+		if (feedback.length === 0) {
+			feedback.push("Evaluation complete.");
+		}
+
+		return {
+			score,
+			promptQualityScore: promptAssessment.score,
+			feedback,
+			testResults: grading.criteria.map((criterion) => ({
+				id: criterion.id,
+				name: criterion.description,
+				passed: passed[criterion.id] === true,
+				error: passed[criterion.id] ? undefined : reasons[criterion.id],
+				expectedOutput: criterion.required
+					? "Required criterion passes"
+					: "Optional criterion passes",
+				actualOutput: passed[criterion.id] ? "PASS" : "FAIL",
+			})),
+		};
+	},
+});
+
+function buildAgentLlmJudgePrompt(args: {
+	userPrompt: string;
+	agentBrief?: string;
+	whatUserSees?: string;
+	visibleHints?: string[];
+	criteria: GradingCriterion[];
+}): string {
+	const criteriaList = args.criteria
+		.map(
+			(criterion) =>
+				`- ${criterion.id}: ${criterion.description} (weight: ${criterion.weight}, required: ${criterion.required ?? false})`,
+		)
+		.join("\n");
+
+	return `You are evaluating an AI AGENT prompt-engineering exercise.
+
+The user was shown a plain-text description of what an agent does (the AGENT BRIEF)
+and had to write the PROMPT that would instruct that agent to do its job well.
+There is no generated output to inspect — judge the user's PROMPT directly.
+
+AGENT BRIEF (what the user saw):
+${args.agentBrief || "Not provided."}
+
+HIDDEN RUBRIC (the ideal agent spec — the user did NOT see this; use it as ground truth for what a strong prompt should cover):
+---
+${args.whatUserSees || "Not provided."}
+---
+
+USER PROMPT (evaluate THIS against the criteria):
+---
+${args.userPrompt}
+---
+
+VISIBLE HINTS the user had:
+${args.visibleHints?.length ? args.visibleHints.map((hint) => `- ${hint}`).join("\n") : "- None"}
+
+EVALUATION RULES:
+- Judge only whether the USER PROMPT satisfies each criterion, using the hidden rubric as the standard for a complete agent specification.
+- A criterion passes only if the user's prompt genuinely addresses it — not if it merely restates the brief.
+- Do not require exact wording; accept any clear, correct expression of the idea.
+
+CRITERIA:
+${criteriaList}
+
+Respond with a JSON object only, no prose:
+{
+  "results": [
+    { "id": "criterion_id", "pass": true, "reason": "brief explanation" }
+  ]
+}`;
+}
 
 function buildCodeLlmJudgePrompt(args: {
 	userPrompt: string;
@@ -1049,7 +1243,7 @@ export const evaluateImage = action({
 	args: {
 		taskId: v.string(),
 		userImageUrl: v.string(),
-		expectedImageUrl: v.string(),
+		expectedImageUrl: v.optional(v.string()),
 		hiddenPromptKeywords: v.optional(v.array(v.string())),
 		style: v.optional(v.string()),
 		userPrompt: v.optional(v.string()),
@@ -1105,38 +1299,50 @@ export const evaluateImage = action({
 			});
 		}
 
-		// Generate evaluation prompt
-		const evaluationPrompt = `Compare these two images and provide a detailed evaluation:
+		// Resolve the grading rubric from authoritative server-side level data so
+		// the client never has to send (and therefore expose) the hidden answer.
+		// Fall back to any args provided for backward compatibility.
+		const rubricKeywords =
+			level?.hiddenPromptKeywords && level.hiddenPromptKeywords.length > 0
+				? level.hiddenPromptKeywords
+				: (args.hiddenPromptKeywords ?? []);
+		const rubricStyle = level?.style ?? args.style;
+		const targetDescription =
+			level?.whatUserSees?.trim() ||
+			[level?.title, level?.description].filter(Boolean).join(" — ") ||
+			args.targetPrompt ||
+			"the target reference image";
 
-Target Image: ${args.expectedImageUrl}
-User Generated Image: ${args.userImageUrl}
+		// Grade against a precise text description of the target plus the learner's
+		// own generated image. A target *image* is attached only when a real,
+		// fetchable http(s) URL is supplied (never a dead/foreign URL), so a missing
+		// or stale target can never break evaluation — it degrades to description-based.
+		const candidateTargetUrl = (args.expectedImageUrl ?? "").trim();
+		const targetImageUrl = /^https?:\/\//i.test(candidateTargetUrl)
+			? candidateTargetUrl
+			: null;
 
-${args.userPrompt ? `User's Prompt: "${args.userPrompt}"` : ""}
-${args.targetPrompt ? `Expected Prompt: "${args.targetPrompt}"` : ""}
-${args.hiddenPromptKeywords?.length ? `Required Keywords: ${args.hiddenPromptKeywords.join(", ")}` : ""}
-${args.style ? `Required Style: ${args.style}` : ""}
+		const evaluationPrompt = `You are grading an AI image-generation learning challenge. The learner was shown a TARGET reference image and asked to recreate it by writing a single image-generation prompt.
 
-Please evaluate the user's image against the target and provide:
-1. A score from 0-100 based on similarity and quality
-2. Similarity score (0-100)
-3. Keyword score (0-100) - how well the image matches required keywords
-4. Style score (0-100) - how well the image matches required style
-5. Detailed feedback explaining the scores
-6. List of keywords that were matched
-7. Detailed criteria breakdown
+TARGET — what the reference image shows:
+${targetDescription}
+${rubricStyle ? `Intended style: ${rubricStyle}` : ""}
+${rubricKeywords.length ? `Key elements the result should contain: ${rubricKeywords.join(", ")}` : ""}
+${args.userPrompt ? `The learner's prompt was: "${args.userPrompt}"` : ""}
 
-Return your response as JSON with this exact format:
+${targetImageUrl ? "The FIRST image is the TARGET reference. The SECOND image is the LEARNER'S generated result." : "The attached image is the LEARNER'S generated result. Judge it against the TARGET description above."}
+
+Evaluate how closely the learner's result matches the target. Be fair and encouraging, but honest.
+
+Respond with ONLY a JSON object (no markdown, no prose) in exactly this shape:
 {
-  "score": 85,
-  "similarity": 78,
-  "keywordScore": 90,
-  "styleScore": 82,
-  "feedback": ["The image captures the main subject well...", "However, the lighting could be improved..."],
-  "keywordsMatched": ["sunset", "ocean", "beach"],
-  "criteria": [
-    {"name": "Subject Accuracy", "score": 85, "feedback": "Main subject is clearly represented"},
-    {"name": "Composition", "score": 78, "feedback": "Good composition but could be more balanced"}
-  ]
+  "score": <0-100 overall match>,
+  "similarity": <0-100 subject & composition match>,
+  "keywordScore": <0-100 how many key elements are visibly present>,
+  "styleScore": <0-100 how well the style matches>,
+  "feedback": ["2-3 short, specific, encouraging sentences"],
+  "keywordsMatched": ["the key elements clearly visible in the result"],
+  "criteria": [{"name": "Subject", "score": <0-100>, "feedback": "..."}]
 }`;
 
 		// Generate evaluation using AI
@@ -1151,9 +1357,11 @@ Return your response as JSON with this exact format:
 					{
 						role: "user",
 						content: [
-							{ type: "text", text: evaluationPrompt },
-							{ type: "image", image: new URL(args.expectedImageUrl) },
-							{ type: "image", image: new URL(args.userImageUrl) },
+							{ type: "text" as const, text: evaluationPrompt },
+							...(targetImageUrl
+								? [{ type: "image" as const, image: new URL(targetImageUrl) }]
+								: []),
+							{ type: "image" as const, image: new URL(args.userImageUrl) },
 						],
 					},
 				],
@@ -1186,7 +1394,9 @@ Return your response as JSON with this exact format:
 		// Parse the AI response as JSON
 		let evaluation: ImageEvaluation;
 		try {
-			evaluation = normalizeImageEvaluation(JSON.parse(result.text));
+			evaluation = normalizeImageEvaluation(
+				JSON.parse(extractJsonText(result.text)),
+			);
 		} catch {
 			evaluation = defaultImageEvaluation("Unable to parse AI evaluation response.");
 		}

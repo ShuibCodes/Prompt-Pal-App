@@ -37,9 +37,13 @@ import {
 } from "@/features/game/components/PracticeStyleChallenge";
 import { HtmlPreview } from "@/features/game/components/HtmlPreview";
 import { CopyTargetPreview } from "@/features/game/components/CopyTargetPreview";
+import { AgentBriefPreview } from "@/features/game/components/AgentBriefPreview";
 import { QuestPromptInputCard } from "@/features/game/components/QuestPromptInputCard";
 import { ChallengeBottomSheet } from "@/features/game/components/ChallengeBottomSheet";
 import { ChallengeScoreBar } from "@/features/game/components/ChallengeScoreBar";
+import { CodingPromptExamples } from "@/features/game/components/CodingPromptExamples";
+import { AgentResultTakeaway } from "@/features/game/components/AgentResultTakeaway";
+import { getCodingPromptExamples } from "@/features/game/utils/codingPromptExamples";
 import { TargetExpandModal } from "@/features/game/components/TargetExpandModal";
 import { TargetImageView } from "@/features/game/components/TargetImageView";
 import {
@@ -82,6 +86,7 @@ function mapQuestLessonToLevel(lesson: any): Level {
 		style: lesson.targetPayload?.style,
 		instruction: lesson.contentPayload?.instruction,
 		whatUserSees: lesson.targetPayload?.whatUserSees,
+		agentBrief: lesson.contentPayload?.agentBrief,
 		requirementBrief: lesson.contentPayload?.requirementBrief,
 		starterCode: lesson.scaffoldPayload?.starterCode,
 		grading: lesson.evaluationPayload?.grading,
@@ -127,6 +132,8 @@ const getModuleIdFromLevelType = (levelType: string): string => {
 			return "coding-logic";
 		case "copywriting":
 			return "copywriting";
+		case "agent":
+			return "agent";
 		default:
 			return "image-generation"; // fallback
 	}
@@ -189,6 +196,7 @@ export default function QuestScreen() {
 		evaluateImage,
 		evaluateCodeSubmission,
 		evaluateCopySubmission,
+		evaluateAgentSubmission,
 	} = useConvexAI();
 	const [prompt, setPrompt] = useState("");
 	const [isGenerating, setIsGenerating] = useState(false);
@@ -204,6 +212,9 @@ export default function QuestScreen() {
 	// whether it is expanded, the prompt-quality score (second result bar), and
 	// whether the full-screen target preview is open.
 	const [phase, setPhase] = useState<"prompt" | "result">("prompt");
+	// Result sheet keeps the build preview + "how prompts compare" panel tucked
+	// behind a tap so the verdict stays minimal (wizard-led) by default.
+	const [resultDetailsOpen, setResultDetailsOpen] = useState(false);
 	// Current sheet snap: 0 = peek (target fully visible), 1 = mid (~40%), 2 = full.
 	const [snapIndex, setSnapIndex] = useState(1);
 	const [promptQuality, setPromptQuality] = useState<number | null>(null);
@@ -268,6 +279,13 @@ export default function QuestScreen() {
 	const helpContent = useMemo(
 		() => (level ? buildQuestHelpContent(level, visibleHints) : null),
 		[level, visibleHints],
+	);
+	// Curated weak/medium/strong example renders for coding challenges, shown in the
+	// result sheet so players can see what a vague vs. precise prompt would build.
+	// Empty for non-coding levels or coding levels without an authored set.
+	const codingPromptExamples = useMemo(
+		() => getCodingPromptExamples(level),
+		[level],
 	);
 
 	// Hint system state
@@ -407,35 +425,18 @@ export default function QuestScreen() {
 					throw new Error("Associated level not found");
 				}
 			} catch (error: any) {
-				logger.warn("QuestScreen", "Using static/mock data for demo", {
+				// TEMP DIAGNOSTIC (image-bug investigation): surface the real load
+				// failure instead of silently swapping in the mock "Master the
+				// Identity Prompt" code lesson. Revert this catch block to restore
+				// the original demo fallback once we've identified the cause.
+				const detail = error?.message ?? String(error);
+				logger.warn("QuestScreen", "loadQuestAndLevel failed", {
 					operation: "loadQuestAndLevel",
 					id,
+					detail,
 				});
-
-				// FALLBACK TO STATIC DATA FOR DEMO
-				const staticLevel: Level = {
-					id: "mock_level_1",
-					title: "Master the Identity Prompt",
-					description: "Learn how to craft a persona that guides the model's tone and behavior.",
-					type: "code",
-					difficulty: "beginner",
-					passingScore: 70,
-					unlocked: true,
-					order: 1,
-					points: 250,
-					starterCode: "<html>\n  <body>\n    <h1 class=\"text-2xl font-bold\">Hello World</h1>\n  </body>\n</html>",
-				};
-
-				const staticQuest = {
-					id: "mock_quest_1",
-					title: "Identity Master",
-					xpReward: 250,
-					completed: false
-				};
-
-				setQuest(staticQuest);
-				setLevel(staticLevel);
-				setError(null); // Clear error to show the UI
+				console.error("[QuestScreen DIAGNOSTIC] load failed for id", id, error);
+				setError(`[DEBUG] load failed for id=${id}: ${detail}`);
 			} finally {
 				setIsLoading(false);
 			}
@@ -628,16 +629,14 @@ export default function QuestScreen() {
 				setGeneratedImage(generatedImageUrl);
 				setActiveTab("attempt");
 
-				if (!level.targetImageUrlForEvaluation) {
-					throw new Error("No target image URL available for evaluation");
-				}
-
+				// Evaluation no longer depends on a fetchable target URL: the server
+				// grades against the level's hidden rubric (whatUserSees + keywords) plus
+				// the learner's generated image. A target image is only sent when a real
+				// URL is available, so a missing/stale one never blocks scoring.
 				const evaluationResult = await evaluateImage({
 					taskId: level.id,
 					userImageUrl: generatedImageUrl,
-					expectedImageUrl: level.targetImageUrlForEvaluation,
-					hiddenPromptKeywords: level.hiddenPromptKeywords,
-					style: level.style,
+					expectedImageUrl: level.targetImageUrlForEvaluation || undefined,
 					userPrompt: prompt,
 				});
 
@@ -1028,6 +1027,103 @@ export default function QuestScreen() {
 					setSnapIndex(2);
 					Keyboard.dismiss();
 				}
+			} else if (level.type === "agent") {
+				// Agent challenges have NO generation step — the user's prompt is
+				// judged directly against the hidden rubric (whatUserSees + criteria).
+				const evaluation = await evaluateAgentSubmission({
+					levelId: level.id,
+					userPrompt: prompt,
+					agentBrief: level.agentBrief,
+					visibleHints,
+				});
+
+				const finalScore = evaluation.score;
+				const userPassed = finalScore >= level.passingScore;
+
+				setLastScore(finalScore);
+				setFeedback(evaluation.feedback || []);
+				setPromptQuality((evaluation as any).promptQualityScore ?? null);
+
+				try {
+					if (user?.id) {
+						await convexHttpClient.mutation(
+							api.mutations.saveUserLevelAttempt,
+							{
+								levelId: level.id,
+								score: finalScore,
+								feedback: evaluation.feedback || [],
+								keywordsMatched: [],
+							},
+						);
+
+						const attempts = await convexHttpClient.query(
+							api.queries.getUserLevelAttempts,
+							{
+								levelId: level.id,
+							},
+						);
+						setAttemptHistory(attempts || []);
+					}
+				} catch (saveError) {
+					logger.warn("GameScreen", "Failed to save attempt", {
+						error: saveError,
+					});
+				}
+
+				if (userPassed) {
+					let shouldAwardXp = true;
+					if (user?.id && quest) {
+						if ((quest as any).isQuestRun) {
+							await convexHttpClient.mutation(api.questProduct.submitQuestAttempt, {
+								runId: quest.id as Id<"questRuns">,
+								submissionPayload: {
+									prompt,
+									score: finalScore,
+								},
+							});
+							const rewardResult = await convexHttpClient.mutation(
+								api.questProduct.claimQuestRewards,
+								{ runId: quest.id as Id<"questRuns"> },
+							);
+							if (rewardResult?.alreadyClaimed) shouldAwardXp = false;
+						} else {
+							const result = await convexHttpClient.mutation(
+								api.mutations.completeDailyQuest,
+								{
+									questId: quest.id,
+									score: finalScore,
+								},
+							);
+							if (result?.alreadyCompleted) shouldAwardXp = false;
+						}
+					}
+					if (user?.id) {
+						const nextAttemptsCount = (attemptHistory?.length ?? 0) + 1;
+						await convexHttpClient.mutation(api.mutations.updateLevelProgress, {
+							appId: "prompt-pal",
+							levelId: level.id,
+							isCompleted: true,
+							bestScore: finalScore,
+							attempts: nextAttemptsCount,
+							completedAt: Date.now(),
+						});
+					}
+					await updateStreak();
+					await completeLevel(level.id);
+					syncToBackend().catch(() => {});
+					if (shouldAwardXp) await addXP(quest?.xpReward || 50);
+					setQuest((q: any) => (q ? { ...q, completed: true } : q));
+					if (quest) setCurrentQuest({ ...quest, completed: true });
+					setPhase("result");
+					setSnapIndex(2);
+					Keyboard.dismiss();
+				} else {
+					// A life is charged when the player chooses "Try again", not on the
+					// failed attempt itself, so show the result either way.
+					setPhase("result");
+					setSnapIndex(2);
+					Keyboard.dismiss();
+				}
 			}
 		} catch (error: any) {
 			const aiError = getAIErrorPresentation(error);
@@ -1064,7 +1160,15 @@ export default function QuestScreen() {
 				<View
 					style={{ borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "#EFEFEF" }}
 				>
-					<HtmlPreview html={generatedCode} height={200} animateIn={false} />
+					<HtmlPreview
+						html={generatedCode}
+						height={200}
+						autoHeight
+						minHeight={120}
+						maxHeight={440}
+						animateIn={false}
+						interactive={false}
+					/>
 				</View>
 			) : null;
 		}
@@ -1077,6 +1181,22 @@ export default function QuestScreen() {
 				>
 					<Text className="text-[15px] leading-6" style={{ color: "#3C3C3C" }}>
 						{generatedCopy}
+					</Text>
+				</ScrollView>
+			) : null;
+		}
+		if (level.type === "agent") {
+			// Agents have no generated artifact — the "result" is the prompt the
+			// player wrote to instruct the agent, shown back for reflection. The
+			// section label above already reads "Your prompt", so no inner label here.
+			return prompt.trim() ? (
+				<ScrollView
+					style={{ maxHeight: 220 }}
+					showsVerticalScrollIndicator={false}
+					nestedScrollEnabled
+				>
+					<Text className="text-[15px] leading-6" style={{ color: "#3C3C3C" }}>
+						{prompt}
 					</Text>
 				</ScrollView>
 			) : null;
@@ -1107,6 +1227,7 @@ export default function QuestScreen() {
 		setMatchedKeywords([]);
 		setActiveTab("target");
 		setQuest((q: any) => (q ? { ...q, completed: false } : q));
+		setResultDetailsOpen(false);
 		setPhase("prompt");
 		setSnapIndex(1);
 	};
@@ -1134,6 +1255,14 @@ export default function QuestScreen() {
 		const passed = lastScore != null && lastScore >= (level.passingScore ?? 70);
 		const rewardXp = quest?.xpReward || level.points || 50;
 		const categoryLabel = (level.type || "code").toUpperCase();
+		// Result preview label adapts to the challenge type: agents show the prompt
+		// they wrote, copywriting shows the copy, everything else shows the build.
+		const builtLabel =
+			level.type === "agent"
+				? "Your prompt"
+				: level.type === "copywriting"
+					? "What you wrote"
+					: "What you built";
 		const levelNum = level.order || 1;
 		const totalHearts = 3;
 
@@ -1210,7 +1339,9 @@ export default function QuestScreen() {
 					}}
 				>
 					<Text
-						className="text-[15px] font-black uppercase tracking-widest"
+						numberOfLines={1}
+						adjustsFontSizeToFit
+						className="text-[14px] font-black uppercase tracking-wide"
 						style={{ color: "#777777" }}
 					>
 						{passed ? "Try again" : "Back"}
@@ -1229,7 +1360,11 @@ export default function QuestScreen() {
 						paddingVertical: 14,
 					}}
 				>
-					<Text className="text-white text-[15px] font-black uppercase tracking-widest">
+					<Text
+						numberOfLines={1}
+						adjustsFontSizeToFit
+						className="text-white text-[14px] font-black uppercase tracking-wide"
+					>
 						{passed ? "Next level" : "Try again"}
 					</Text>
 				</TouchableOpacity>
@@ -1275,7 +1410,13 @@ export default function QuestScreen() {
 				<QuestPromptInputCard
 					prompt={prompt}
 					onChangePrompt={handlePromptChange}
-					promptPlaceholder="Describe what you want to build…"
+					promptPlaceholder={
+						level.type === "agent"
+							? "Write the prompt that instructs this agent…"
+							: level.type === "copywriting"
+								? "Describe the copy you want…"
+								: "Describe what you want to build…"
+					}
 					scaffoldType={level.scaffoldType}
 					scaffoldTemplate={level.scaffoldTemplate}
 					beginnerTemplateLocked={beginnerLocked}
@@ -1315,15 +1456,42 @@ export default function QuestScreen() {
 			</View>
 		);
 
+		const verdictTitle = passed ? "Nailed it!" : "Almost there!";
+		const primaryFeedback =
+			feedback[0] ??
+			(passed
+				? "Great prompt — you covered what mattered."
+				: "Close! Tighten up your prompt and try again.");
+		const builtPreview = renderBuiltPreview();
+		const hasCompare =
+			level.type === "code" && codingPromptExamples.length > 0;
+		const hasAgentTakeaway = level.type === "agent";
+		const hasExtraFeedback = feedback.length > 1;
+		const hasResultDetails =
+			Boolean(builtPreview) ||
+			hasCompare ||
+			hasAgentTakeaway ||
+			hasExtraFeedback;
+		const resultDetailsLabel = hasCompare
+			? "See how prompts compare"
+			: hasAgentTakeaway
+				? "See the takeaway"
+				: "See what you built";
+
 		const resultBody = (
 			<View>
-				<View className="flex-row items-center justify-between mb-4">
-					<Text className="text-[22px] font-black" style={{ color: "#3C3C3C" }}>
-						Your result
+				<View className="items-center mb-5">
+					<Image
+						source={require("../../../../assets/images/simplification.png")}
+						style={{ width: 96, height: 96 }}
+						resizeMode="contain"
+					/>
+					<Text className="text-[26px] font-black mt-2" style={{ color: "#3C3C3C" }}>
+						{verdictTitle}
 					</Text>
 					{passed ? (
 						<View
-							className="flex-row items-center px-3 py-1.5 rounded-full"
+							className="flex-row items-center px-3 py-1 rounded-full mt-1.5"
 							style={{ backgroundColor: "#FFF4E5" }}
 						>
 							<Ionicons name="flash" size={14} color="#FF9600" style={{ marginRight: 4 }} />
@@ -1332,7 +1500,7 @@ export default function QuestScreen() {
 							</Text>
 						</View>
 					) : (
-						<View className="px-3 py-1.5 rounded-full" style={{ backgroundColor: "#FDECEC" }}>
+						<View className="px-3 py-1 rounded-full mt-1.5" style={{ backgroundColor: "#FDECEC" }}>
 							<Text
 								className="text-[11px] font-black uppercase tracking-widest"
 								style={{ color: "#E53935" }}
@@ -1343,19 +1511,6 @@ export default function QuestScreen() {
 					)}
 				</View>
 
-				<Text
-					className="text-[12px] font-black uppercase tracking-widest mb-2"
-					style={{ color: "#8E8E93" }}
-				>
-					What you built
-				</Text>
-				<View
-					className="rounded-2xl p-3 mb-5"
-					style={{ backgroundColor: "#F7F7F7", borderWidth: 1, borderColor: "#EFEFEF" }}
-				>
-					{renderBuiltPreview()}
-				</View>
-
 				<ChallengeScoreBar label="Task match" value={lastScore ?? 0} color="#58CC02" />
 				<ChallengeScoreBar
 					label="Prompt quality"
@@ -1364,24 +1519,85 @@ export default function QuestScreen() {
 					delay={120}
 				/>
 
-				{feedback.length > 0 ? (
-					<View className="mt-2">
-						<Text
-							className="text-[12px] font-black uppercase tracking-widest mb-2"
-							style={{ color: "#8E8E93" }}
-						>
-							Feedback
+				{/* One concise, wizard-style takeaway — the single most useful line. */}
+				{primaryFeedback ? (
+					<View
+						className="mt-4 rounded-2xl p-4"
+						style={{ backgroundColor: "#F7F7F7", borderWidth: 1, borderColor: "#EFEFEF" }}
+					>
+						<Text className="text-[15px] leading-6" style={{ color: "#3C3C3C" }}>
+							{primaryFeedback}
 						</Text>
-						{feedback.slice(0, 4).map((line, index) => (
-							<View key={index} className="flex-row mb-1.5">
-								<Text className="mr-2" style={{ color: passed ? "#58CC02" : "#FF9600" }}>
-									•
-								</Text>
-								<Text className="flex-1 text-[14px] leading-5" style={{ color: "#3C3C3C" }}>
-									{line}
-								</Text>
+					</View>
+				) : null}
+
+				{/* Everything detailed — the build preview, extra feedback, and the
+				    weak/okay/great comparison — stays one tap away to keep this minimal. */}
+				{hasResultDetails ? (
+					<View className="mt-4">
+						<TouchableOpacity
+							onPress={() => setResultDetailsOpen((open) => !open)}
+							activeOpacity={0.8}
+							accessibilityRole="button"
+							className="flex-row items-center justify-center py-2"
+						>
+							<Ionicons
+								name={resultDetailsOpen ? "chevron-down" : "chevron-forward"}
+								size={16}
+								color="#58CC02"
+								style={{ marginRight: 6 }}
+							/>
+							<Text
+								className="text-[13px] font-black uppercase tracking-widest"
+								style={{ color: "#58CC02" }}
+							>
+								{resultDetailsOpen ? "Hide details" : resultDetailsLabel}
+							</Text>
+						</TouchableOpacity>
+
+						{resultDetailsOpen ? (
+							<View className="mt-3">
+								{builtPreview ? (
+									<>
+										<Text
+											className="text-[12px] font-black uppercase tracking-widest mb-2"
+											style={{ color: "#8E8E93" }}
+										>
+											{builtLabel}
+										</Text>
+										<View
+											className="rounded-2xl p-3 mb-5"
+											style={{ backgroundColor: "#F7F7F7", borderWidth: 1, borderColor: "#EFEFEF" }}
+										>
+											{builtPreview}
+										</View>
+									</>
+								) : null}
+
+								{hasExtraFeedback ? (
+									<View className="mb-4">
+										{feedback.slice(1, 4).map((line, index) => (
+											<View key={index} className="flex-row mb-1.5">
+												<Text className="mr-2" style={{ color: passed ? "#58CC02" : "#FF9600" }}>
+													•
+												</Text>
+												<Text className="flex-1 text-[14px] leading-5" style={{ color: "#3C3C3C" }}>
+													{line}
+												</Text>
+											</View>
+										))}
+									</View>
+								) : null}
+
+								{hasCompare ? (
+									<CodingPromptExamples examples={codingPromptExamples} />
+								) : null}
+
+								{hasAgentTakeaway ? (
+									<AgentResultTakeaway takeaway={level.lessonTakeaway} passed={passed} />
+								) : null}
 							</View>
-						))}
+						) : null}
 					</View>
 				) : null}
 			</View>
@@ -1466,7 +1682,7 @@ export default function QuestScreen() {
 										borderColor: "#EFEFEF",
 									}}
 								>
-									<View style={{ flex: 1 }}>{renderLessonTarget()}</View>
+									<View style={{ flex: 1 }}>{renderLessonTarget(false)}</View>
 								</View>
 								<TouchableOpacity
 									onPress={() => setTargetExpanded(true)}
@@ -1551,7 +1767,7 @@ export default function QuestScreen() {
 		);
 	};
 
-	const renderLessonTarget = () => {
+	const renderLessonTarget = (interactive = true) => {
 		if (!level) return null;
 
 		const starterCode = (level as { starterCode?: string }).starterCode;
@@ -1572,6 +1788,18 @@ export default function QuestScreen() {
 					}
 					className="w-full h-full rounded-2xl"
 					resizeMode="cover"
+				/>
+			);
+		}
+
+		if (level.type === "agent") {
+			// Agent: the ONLY visible context is the plain-text brief. No image, no
+			// template, no criteria (the rubric is hidden).
+			return (
+				<AgentBriefPreview
+					agentBrief={level.agentBrief ?? ""}
+					instruction={level.instruction}
+					height={targetPreviewHeight}
 				/>
 			);
 		}
@@ -1602,6 +1830,7 @@ export default function QuestScreen() {
 					}
 					height={targetPreviewHeight}
 					animateIn={false}
+					interactive={interactive}
 				/>
 			);
 		}

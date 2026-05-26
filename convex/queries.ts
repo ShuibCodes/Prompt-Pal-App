@@ -36,8 +36,11 @@ function toPublicLevel(level: any) {
 		style: level.style,
 		moduleTitle: level.moduleTitle,
 		requirementBrief: level.requirementBrief,
+		requirementImage: level.requirementImage,
 		language: level.language,
 		briefTitle: level.briefTitle,
+		// Agent challenge: plain-text brief shown as the only visible context
+		agentBrief: level.agentBrief,
 		starterContext: level.starterContext,
 		wordLimit: level.wordLimit,
 		metrics: level.metrics,
@@ -755,7 +758,12 @@ export const getLeaderboard = query({
 export const getAllLevels = query({
 	args: {
 		type: v.optional(
-			v.union(v.literal("image"), v.literal("code"), v.literal("copywriting")),
+			v.union(
+				v.literal("image"),
+				v.literal("code"),
+				v.literal("copywriting"),
+				v.literal("agent"),
+			),
 		),
 		difficulty: v.optional(
 			v.union(
@@ -823,6 +831,11 @@ export const getLevelEvaluationData = internalQuery({
 			moduleTitle: level.moduleTitle,
 			requirementBrief: level.requirementBrief,
 			requirementImage: level.requirementImage,
+			// Image-challenge grading rubric (authoritative, server-side only).
+			// whatUserSees is already returned further below.
+			hiddenPromptKeywords: level.hiddenPromptKeywords,
+			style: level.style,
+			targetImageUrl: level.targetImageUrl,
 			language: level.language,
 			functionName: level.functionName,
 			testCases: level.testCases,
@@ -847,6 +860,8 @@ export const getLevelEvaluationData = internalQuery({
 			starterContext: level.starterContext,
 			whatUserSees: level.whatUserSees,
 			starterCode: level.starterCode,
+			// Agent challenge: visible brief (also passed as judge context)
+			agentBrief: level.agentBrief,
 		};
 	},
 });

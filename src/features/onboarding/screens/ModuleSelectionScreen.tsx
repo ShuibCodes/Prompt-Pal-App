@@ -27,9 +27,9 @@ const MODULES = [
 		borderColor: "rgba(65, 81, 255, 0.2)",
 	},
 	{
-		id: "copywriting",
-		title: "Copywriting",
-		description: "Write persuasive marketing copy that matches brand voice",
+		id: "image-generation",
+		title: "Image Generation",
+		description: "Direct AI image models with precise, detailed prompts",
 		color: "#FF6B00",
 		gradient: "rgba(255, 107, 0, 0.08)",
 		borderColor: "rgba(255, 107, 0, 0.2)",

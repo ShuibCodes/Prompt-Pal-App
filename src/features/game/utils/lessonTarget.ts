@@ -303,6 +303,281 @@ const codingTargetHtmlById: Record<string, string> = {
     </article>
   </body>
 </html>`,
+	"code-16-easy": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 p-6">
+    <div class="grid grid-cols-3 gap-4">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+        <div class="bg-slate-200 h-24 rounded-xl mb-3"></div>
+        <h3 class="font-black text-slate-950">Wireless Headphones</h3>
+        <p class="text-slate-600 mb-2">$99</p>
+        <button class="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white">Buy</button>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+        <div class="bg-slate-200 h-24 rounded-xl mb-3"></div>
+        <h3 class="font-black text-slate-950">Smart Watch</h3>
+        <p class="text-slate-600 mb-2">$149</p>
+        <button class="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white">Buy</button>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+        <div class="bg-slate-200 h-24 rounded-xl mb-3"></div>
+        <h3 class="font-black text-slate-950">Bluetooth Speaker</h3>
+        <p class="text-slate-600 mb-2">$79</p>
+        <button class="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white">Buy</button>
+      </div>
+    </div>
+  </body>
+</html>`,
+	"code-17-easy": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-8 text-center bg-slate-50">
+    <h1 class="text-2xl font-black text-slate-950 mb-6">Launch in:</h1>
+    <div class="flex justify-center gap-3">
+      <div class="rounded-2xl bg-slate-950 text-white px-5 py-4"><span class="block text-3xl font-black">02</span><span class="text-xs text-slate-300">days</span></div>
+      <div class="rounded-2xl bg-slate-950 text-white px-5 py-4"><span class="block text-3xl font-black">14</span><span class="text-xs text-slate-300">hrs</span></div>
+      <div class="rounded-2xl bg-slate-950 text-white px-5 py-4"><span class="block text-3xl font-black">37</span><span class="text-xs text-slate-300">min</span></div>
+      <div class="rounded-2xl bg-emerald-600 text-white px-5 py-4"><span class="block text-3xl font-black">09</span><span class="text-xs text-emerald-100">sec</span></div>
+    </div>
+  </body>
+</html>`,
+	"code-18-easy": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-8 bg-white max-w-lg">
+    <h1 class="text-2xl font-black text-slate-950 mb-4">FAQ</h1>
+    <div class="space-y-2">
+      <div class="rounded-xl border border-slate-200">
+        <button class="w-full flex items-center justify-between px-4 py-3 font-bold text-slate-950">How do I reset my password?<span class="text-slate-400">−</span></button>
+        <p class="px-4 pb-3 text-slate-600">Visit Settings and click Reset Password.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200">
+        <button class="w-full flex items-center justify-between px-4 py-3 font-bold text-slate-950">Can I change my plan?<span class="text-slate-400">+</span></button>
+      </div>
+      <div class="rounded-xl border border-slate-200">
+        <button class="w-full flex items-center justify-between px-4 py-3 font-bold text-slate-950">How do I contact support?<span class="text-slate-400">+</span></button>
+      </div>
+    </div>
+  </body>
+</html>`,
+	"code-19-easy": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-8 bg-slate-50">
+    <div class="flex gap-3">
+      <button class="bg-blue-600 text-white px-5 py-2.5 rounded-lg font-medium">Primary</button>
+      <button class="bg-slate-200 text-slate-800 px-5 py-2.5 rounded-lg font-medium">Secondary</button>
+    </div>
+  </body>
+</html>`,
+	"code-20-easy": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-8 max-w-md bg-white">
+    <h1 class="text-2xl font-black text-slate-950 mb-4">My Tasks</h1>
+    <div class="flex gap-2 mb-4">
+      <input class="flex-1 rounded-xl border border-slate-300 px-4 py-3" placeholder="Add a task" />
+      <button class="rounded-xl bg-slate-950 px-4 py-3 text-white font-bold">Add</button>
+    </div>
+    <div class="space-y-2">
+      <div class="rounded-xl border border-slate-200 p-3">Buy groceries</div>
+      <div class="rounded-xl border border-slate-200 p-3">Call the dentist</div>
+    </div>
+  </body>
+</html>`,
+	"code-21-medium": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-8 bg-slate-50">
+    <form class="max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
+      <h2 class="text-xl font-black text-slate-950">Create your account</h2>
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-1">Email</label>
+        <input type="email" class="w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="you@example.com" />
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-1">Password</label>
+        <input type="password" class="w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Choose a password" />
+      </div>
+      <button class="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white">Sign Up</button>
+    </form>
+  </body>
+</html>`,
+	"code-22-medium": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-8 max-w-md bg-white">
+    <input class="w-full rounded-xl border border-slate-300 px-4 py-3 mb-2" value="a" />
+    <p class="text-xs font-semibold text-slate-500 mb-3">3 results</p>
+    <ul class="space-y-1 text-slate-800">
+      <li class="rounded-lg bg-slate-50 px-3 py-2">Apple</li>
+      <li class="rounded-lg bg-slate-50 px-3 py-2">Banana</li>
+      <li class="rounded-lg bg-slate-50 px-3 py-2">Date</li>
+    </ul>
+  </body>
+</html>`,
+	"code-23-medium": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-8 bg-gray-100 flex justify-center">
+    <div class="bg-white rounded-xl shadow p-6 w-72 border border-slate-200">
+      <h2 class="text-lg font-black text-slate-950">Starter</h2>
+      <p class="text-3xl font-black my-2 text-slate-950">$19<span class="text-base font-normal text-slate-500">/mo</span></p>
+      <ul class="text-slate-600 space-y-1 my-4">
+        <li>5 projects</li>
+        <li>2 GB storage</li>
+        <li>Email support</li>
+      </ul>
+      <button class="bg-blue-600 text-white w-full py-2 rounded-lg font-bold">Choose plan</button>
+    </div>
+  </body>
+</html>`,
+	"code-24-medium": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-8 bg-slate-50">
+    <div class="flex gap-2">
+      <button aria-label="Print" class="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">🖨️ Print</button>
+      <button aria-label="Favorite" class="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">❤️ Favorite</button>
+      <button aria-label="Delete" class="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">🗑️ Delete</button>
+    </div>
+  </body>
+</html>`,
+	"code-25-medium": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-8 bg-white">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="bg-red-200 h-24 rounded-xl"></div>
+      <div class="bg-green-200 h-24 rounded-xl"></div>
+      <div class="bg-blue-200 h-24 rounded-xl"></div>
+    </div>
+    <p class="mt-3 text-xs text-slate-500">Stacks to one column on phones, three across on larger screens.</p>
+  </body>
+</html>`,
+	"code-26-hard": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-8 max-w-lg bg-slate-50">
+    <h1 class="text-2xl font-black text-slate-950 mb-1">Checkout</h1>
+    <p class="text-xs font-semibold text-emerald-600 mb-4">Step 1 of 4 · Cart review</p>
+    <div class="space-y-2 rounded-2xl bg-white p-4 border border-slate-200">
+      <div class="flex justify-between"><span>Wireless Headphones</span><span class="font-bold">$99</span></div>
+      <div class="flex justify-between"><span>Smart Watch</span><span class="font-bold">$149</span></div>
+      <div class="border-t border-slate-200 pt-2 flex justify-between font-black text-slate-950"><span>Total</span><span>$248</span></div>
+    </div>
+    <button class="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 text-white font-bold">Continue to shipping</button>
+  </body>
+</html>`,
+	"code-27-hard": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-8 bg-white">
+    <h1 class="text-xl font-black text-slate-950 mb-4">Price calculator</h1>
+    <div class="space-y-2 font-mono text-sm">
+      <div class="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700"><span class="font-bold">PASS</span> 0% of $100 → $100</div>
+      <div class="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700"><span class="font-bold">PASS</span> 100% of $100 → $0</div>
+      <div class="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700"><span class="font-bold">PASS</span> 20% of $50 → $40</div>
+      <div class="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700"><span class="font-bold">PASS</span> invalid input → handled</div>
+    </div>
+  </body>
+</html>`,
+	"code-28-hard": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        --color-bg: #fef3c7;
+        --color-text: #92400e;
+        --color-border: #f59e0b;
+        --space-sm: 8px;
+        --space-md: 16px;
+      }
+      .alert {
+        background: var(--color-bg);
+        color: var(--color-text);
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        padding: var(--space-md);
+        margin: var(--space-md);
+        display: flex;
+        gap: var(--space-sm);
+        font-family: system-ui, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="alert"><strong>Heads up:</strong> Your trial ends in 3 days.</div>
+  </body>
+</html>`,
+	"code-29-hard": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-8 bg-slate-50">
+    <button class="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold">Save</button>
+    <div class="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">✓ Saved! The click handler now runs after the button exists.</div>
+  </body>
+</html>`,
+	"code-30-hard": `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-8 bg-gray-100 flex justify-center">
+    <figure class="max-w-sm rounded-3xl bg-white p-6 shadow-sm border border-slate-200">
+      <blockquote class="text-lg font-medium text-slate-800">"PromptPal made my prompts sharper in a week. The lessons just click."</blockquote>
+      <figcaption class="mt-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center font-black text-emerald-700">AR</div>
+        <div>
+          <p class="font-black text-slate-950">Amara Reed</p>
+          <p class="text-sm text-slate-500">Product Designer</p>
+        </div>
+      </figcaption>
+    </figure>
+  </body>
+</html>`,
 };
 
 export function getCodingLessonTargetHtml(level?: Level | null): string | null {

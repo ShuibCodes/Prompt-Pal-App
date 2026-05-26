@@ -8,6 +8,7 @@ export function useConvexAI() {
 	const evaluateImageAction = useAction(api.ai.evaluateImage);
 	const evaluateCodeSubmissionAction = useAction(api.ai.evaluateCodeSubmission);
 	const evaluateCopySubmissionAction = useAction(api.ai.evaluateCopySubmission);
+	const evaluateAgentSubmissionAction = useAction(api.ai.evaluateAgentSubmission);
 
 	const generateText = async (prompt: string, context?: string) => {
 		try {
@@ -47,7 +48,7 @@ export function useConvexAI() {
 	const evaluateImage = async (options: {
 		taskId: string;
 		userImageUrl: string;
-		expectedImageUrl: string;
+		expectedImageUrl?: string;
 		hiddenPromptKeywords?: string[];
 		style?: string;
 		userPrompt?: string;
@@ -81,11 +82,21 @@ export function useConvexAI() {
 		return evaluateCopySubmissionAction(options);
 	};
 
+	const evaluateAgentSubmission = async (options: {
+		levelId: string;
+		userPrompt: string;
+		agentBrief?: string;
+		visibleHints?: string[];
+	}) => {
+		return evaluateAgentSubmissionAction(options);
+	};
+
 	return {
 		generateText,
 		generateImage,
 		evaluateImage,
 		evaluateCodeSubmission,
 		evaluateCopySubmission,
+		evaluateAgentSubmission,
 	};
 }

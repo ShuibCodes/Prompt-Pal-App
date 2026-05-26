@@ -24,6 +24,21 @@ const CODE_IDS = [
 	"code-13-hard",
 	"code-14-hard",
 	"code-15-hard",
+	"code-16-easy",
+	"code-17-easy",
+	"code-18-easy",
+	"code-19-easy",
+	"code-20-easy",
+	"code-21-medium",
+	"code-22-medium",
+	"code-23-medium",
+	"code-24-medium",
+	"code-25-medium",
+	"code-26-hard",
+	"code-27-hard",
+	"code-28-hard",
+	"code-29-hard",
+	"code-30-hard",
 ];
 
 const codingLessonScaffolds: Record<
@@ -76,6 +91,46 @@ const codingLessonScaffolds: Record<
 	},
 	[CODE_IDS[9]]: {
 		checklistItems: ["Use non-technical language", "Describe the experience", "Name the main interaction"],
+	},
+	[CODE_IDS[15]]: {
+		scaffoldTemplate:
+			"Here's an example of the pattern I want: [example]. Now build [what to build] the same way, matching [what to match]",
+		checklistItems: ["The example to copy", "What to build", "What to match"],
+	},
+	[CODE_IDS[16]]: {
+		scaffoldTemplate:
+			"Build [feature], but do not [what to avoid] and keep it [the limit]",
+		checklistItems: ["What to build", "What to avoid", "The limit"],
+	},
+	[CODE_IDS[17]]: {
+		scaffoldTemplate:
+			"Reformat [content] as [output format], with [specific detail]",
+		checklistItems: ["The content", "Output format", "Specific detail"],
+	},
+	[CODE_IDS[18]]: {
+		scaffoldTemplate:
+			"Add [new element] and match the existing [reference element], especially its [shared traits]",
+		checklistItems: ["New element", "Reference element", "Shared traits"],
+	},
+	[CODE_IDS[19]]: {
+		scaffoldTemplate:
+			"Build the simplest version of [feature] first: just [the core], with no [extras yet]",
+		checklistItems: ["The feature", "The core only", "Extras to skip for now"],
+	},
+	[CODE_IDS[20]]: {
+		checklistItems: ["The role AI should take", "The task", "The quality standard"],
+	},
+	[CODE_IDS[21]]: {
+		checklistItems: ["The feature", "Acceptance criteria", "How to verify it"],
+	},
+	[CODE_IDS[22]]: {
+		checklistItems: ["The single change", "Show only what changed", "Leave the rest intact"],
+	},
+	[CODE_IDS[23]]: {
+		checklistItems: ["The controls", "Accessible labels", "Keyboard support"],
+	},
+	[CODE_IDS[24]]: {
+		checklistItems: ["The layout", "Mobile behavior", "Desktop behavior"],
 	},
 };
 
@@ -935,6 +990,833 @@ const codingLessonsBase = [
 		},
 		lessonTakeaway:
 			"A complete prompt covers the stack, the data, the edge cases, and the visual requirements. When AI has everything, it builds everything.",
+	},
+	{
+		id: CODE_IDS[15],
+		title: "Show, don't just tell",
+		instruction:
+			"This page has one product card. Craft a prompt that points AI at the existing card as an example, then asks it to create two more just like it for different products. Use your own words; don't copy this instruction.",
+		whatUserSees:
+			"A product grid with a single card: an image box, a name ('Wireless Headphones'), a price ('$99'), and a Buy button. There's empty space for more cards, but only one exists.",
+		hint: "Reference the card that's already there: 'Here's the card I have — build two more like it for these products.' A concrete example beats a long description.",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n  </head>\n  <body class="p-8 bg-gray-100">\n    <div class="grid grid-cols-3 gap-4">\n      <div class="bg-white rounded-lg shadow p-4">\n        <div class="bg-gray-200 h-32 rounded mb-3"></div>\n        <h3 class="font-bold">Wireless Headphones</h3>\n        <p class="text-gray-600">$99</p>\n        <button class="mt-2 bg-blue-500 text-white px-3 py-1 rounded">Buy</button>\n      </div>\n    </div>\n  </body>\n</html>',
+		grading: {
+			method: "static_analysis + llm_judge",
+			criteria: [
+				{
+					id: "has_three_cards",
+					description:
+						"The grid now contains three product cards total (the original plus two new ones).",
+					method: "static_analysis",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "cards_match_example",
+					description:
+						"The new cards reuse the same structure as the example card: image box, name, price, and Buy button.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "prompt_used_the_example",
+					description:
+						"The user's prompt referenced the existing card as the pattern to copy, instead of describing a card from scratch.",
+					method: "llm_judge",
+					weight: 2,
+					required: false,
+				},
+			],
+			passingCondition:
+				"All required criteria pass and total weight score is at least 4 out of 6.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition: "has_three_cards passes but cards_match_example fails.",
+			nudge:
+				"The new cards don't match the original. Tell AI to follow the existing card exactly as the template.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"Showing AI an example is one of the most reliable prompting moves. It copies a pattern far more accurately than it invents one.",
+		},
+		lessonTakeaway:
+			"When a pattern already exists, point AI at it as an example. Showing beats telling.",
+	},
+	{
+		id: CODE_IDS[16],
+		title: "Set the boundaries",
+		instruction:
+			"This page needs a countdown timer. Craft a prompt that asks for it but sets clear limits: no external libraries, vanilla JavaScript only, and don't change anything above the heading. Use your own words.",
+		whatUserSees:
+			"A page with a single heading, 'Launch in:'. Below it, nothing — no timer, no numbers, no script yet.",
+		hint: "State your limits up front: 'Use plain JavaScript, no libraries, and leave the heading alone.' Constraints keep AI from over-building.",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n  </head>\n  <body class="p-8 text-center">\n    <h1 class="text-2xl font-bold">Launch in:</h1>\n  </body>\n</html>',
+		grading: {
+			method: "static_analysis + llm_judge",
+			criteria: [
+				{
+					id: "has_working_timer",
+					description:
+						"A countdown timer is present and updates over time below the heading.",
+					method: "static_analysis",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "no_external_libraries",
+					description:
+						"The solution uses only vanilla JavaScript — no new CDN scripts or third-party libraries were added.",
+					method: "static_analysis",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "prompt_stated_constraints",
+					description:
+						"The user's prompt explicitly named at least one constraint (no libraries, vanilla JS, or what to leave untouched).",
+					method: "llm_judge",
+					weight: 2,
+					required: false,
+				},
+			],
+			passingCondition:
+				"All required criteria pass and total weight score is at least 4 out of 6.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition: "has_working_timer passes but no_external_libraries fails.",
+			nudge:
+				"AI reached for a library. Tell it explicitly: vanilla JavaScript only, no external dependencies.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"Constraints are guardrails. The limits you set are the difference between code that fits your project and code you have to untangle.",
+		},
+		lessonTakeaway:
+			"Name your constraints in the prompt. What you forbid shapes the output as much as what you ask for.",
+	},
+	{
+		id: CODE_IDS[17],
+		title: "Ask for the output format you want",
+		instruction:
+			"This page has three FAQ items shown as plain text. Craft a prompt that asks AI to reformat them as a collapsible accordion — each answer hidden until its question is clicked. Be specific about the format. Use your own words.",
+		whatUserSees:
+			"A 'FAQ' heading followed by three questions and answers, all shown at once as plain paragraphs. Nothing is collapsible — every answer is always visible.",
+		hint: "Describe the exact format you want: 'Make each question a clickable header that expands to show its answer, collapsed by default.' Vague format requests get vague layouts.",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n  </head>\n  <body class="p-8 max-w-lg">\n    <h1 class="text-2xl font-bold mb-4">FAQ</h1>\n    <div>\n      <p class="font-semibold">How do I reset my password?</p>\n      <p class="text-gray-600 mb-3">Visit Settings and click Reset Password.</p>\n      <p class="font-semibold">Can I change my plan?</p>\n      <p class="text-gray-600 mb-3">Yes, from the Billing page at any time.</p>\n      <p class="font-semibold">How do I contact support?</p>\n      <p class="text-gray-600">Email support@example.com.</p>\n    </div>\n  </body>\n</html>',
+		grading: {
+			method: "static_analysis + llm_judge",
+			criteria: [
+				{
+					id: "is_accordion",
+					description:
+						"Each question acts as a clickable header that shows or hides its answer.",
+					method: "static_analysis",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "collapsed_by_default",
+					description:
+						"Answers are hidden by default and only appear after the question is clicked.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "content_preserved",
+					description:
+						"All three original questions and answers are kept, with the same text.",
+					method: "llm_judge",
+					weight: 1,
+					required: false,
+				},
+			],
+			passingCondition:
+				"All required criteria pass and total weight score is at least 4 out of 5.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition: "is_accordion passes but collapsed_by_default fails.",
+			nudge:
+				"The answers still show by default. Specify the starting state: 'collapsed until clicked.'",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"When you name the exact format, AI builds the structure you pictured instead of guessing at one.",
+		},
+		lessonTakeaway:
+			"Specify the shape of the output — a table, a list, an accordion. The format is part of the requirement.",
+	},
+	{
+		id: CODE_IDS[18],
+		title: "Match an existing reference",
+		instruction:
+			"This page has a styled 'Primary' button. Craft a prompt that adds a 'Secondary' button next to it, matching the primary button's size and shape but in a muted gray style. Anchor your request to the existing button. Use your own words.",
+		whatUserSees:
+			"A page with one button labeled 'Primary' — blue, rounded, with comfortable padding. There's space beside it, but no second button.",
+		hint: "Tell AI to match what's already there: 'Add a Secondary button with the same size and rounding as the Primary one, but gray.' A reference removes guesswork.",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n  </head>\n  <body class="p-8">\n    <div class="flex gap-3">\n      <button class="bg-blue-600 text-white px-5 py-2.5 rounded-lg font-medium">Primary</button>\n    </div>\n  </body>\n</html>',
+		grading: {
+			method: "static_analysis + llm_judge",
+			criteria: [
+				{
+					id: "has_secondary_button",
+					description:
+						"A second button labeled 'Secondary' is present next to the primary button.",
+					method: "static_analysis",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "matches_reference_shape",
+					description:
+						"The secondary button shares the primary button's size, padding, and rounding.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "visually_distinct_style",
+					description:
+						"The secondary button is clearly a muted or gray variant, not another blue button.",
+					method: "llm_judge",
+					weight: 1,
+					required: false,
+				},
+			],
+			passingCondition:
+				"All required criteria pass and total weight score is at least 4 out of 5.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition:
+				"has_secondary_button passes but matches_reference_shape fails.",
+			nudge:
+				"The new button doesn't match the original's shape. Point AI at the Primary button as the reference to copy.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"Anchoring to something on the page keeps your UI consistent. AI matches an existing reference more reliably than an abstract description.",
+		},
+		lessonTakeaway:
+			"When you want consistency, tell AI to match an element that already exists rather than describing the style again.",
+	},
+	{
+		id: CODE_IDS[19],
+		title: "Start with the simplest version",
+		instruction:
+			"You want a to-do feature. Craft a prompt that asks AI for the simplest working version first — just an input that adds typed items to a list — with no editing, deleting, or saving yet. Use your own words.",
+		whatUserSees:
+			"A page with a 'My Tasks' heading and an empty area below. There's no input box and no list — nothing to add tasks with yet.",
+		hint: "Ask for the core only: 'Just an input and a list that adds items. No delete, edit, or storage for now.' Scope it down on purpose.",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n  </head>\n  <body class="p-8 max-w-md">\n    <h1 class="text-2xl font-bold mb-4">My Tasks</h1>\n  </body>\n</html>',
+		grading: {
+			method: "static_analysis + llm_judge",
+			criteria: [
+				{
+					id: "can_add_items",
+					description:
+						"There is an input and a way to add typed items to a visible list.",
+					method: "static_analysis",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "stayed_minimal",
+					description:
+						"The output is limited to adding items — it did not add delete, edit, or persistence.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "prompt_scoped_to_mvp",
+					description:
+						"The user's prompt explicitly asked for the simplest version or excluded extra features for now.",
+					method: "llm_judge",
+					weight: 2,
+					required: false,
+				},
+			],
+			passingCondition:
+				"All required criteria pass and total weight score is at least 4 out of 6.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition: "can_add_items passes but stayed_minimal fails.",
+			nudge:
+				"AI added more than you asked for. Tell it to build only the core and hold the extras for later.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"Starting minimal gives you something working fast — then you layer features on with focused follow-ups. It beats asking for everything at once.",
+		},
+		lessonTakeaway:
+			"Ask for the simplest working version first. You can always add to something that runs; you can't debug everything at once.",
+	},
+	{
+		id: CODE_IDS[20],
+		title: "Give AI a role",
+		instruction:
+			"This signup form works but looks unfinished. Craft a prompt that tells AI to act as a senior frontend engineer and bring the form up to a production-quality standard. Set the role, the task, and the bar. Use your own words.",
+		whatUserSees:
+			"A bare signup form: an unstyled email input, an unstyled password input, and a plain 'Sign Up' button stacked on a white page. It functions, but looks like a prototype.",
+		hint: "Open with a role and a standard: 'Act as a senior frontend engineer. Polish this signup form to production quality — spacing, labels, focus states, and a clear hierarchy.'",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n  </head>\n  <body class="p-8">\n    <form class="max-w-sm">\n      <input type="email" placeholder="Email" class="border" />\n      <input type="password" placeholder="Password" class="border" />\n      <button>Sign Up</button>\n    </form>\n  </body>\n</html>',
+		grading: {
+			method: "llm_judge",
+			criteria: [
+				{
+					id: "prompt_assigns_role",
+					description:
+						"The user's prompt gives AI a specific role or persona (e.g., senior frontend engineer or product designer).",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "prompt_sets_a_standard",
+					description:
+						"The prompt states the quality bar to hit (e.g., production-quality, accessible, polished).",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "output_is_clearly_elevated",
+					description:
+						"The resulting form is meaningfully more polished: proper spacing, labels or focus states, and a clear visual hierarchy.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+			],
+			passingCondition: "All required criteria pass.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition: "output_is_clearly_elevated fails.",
+			nudge:
+				"The result still looks rough. Give AI a role and a clear standard — 'act as a senior engineer and make it production-quality' — so it raises its own bar.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"Assigning a role primes AI to apply the judgment that role would. 'Act as a senior engineer' pulls higher-quality defaults out of the same model.",
+		},
+		lessonTakeaway:
+			"Give AI a role and a standard. The persona you assign shifts the quality and assumptions of everything it produces.",
+	},
+	{
+		id: CODE_IDS[21],
+		title: "Define 'done' with acceptance criteria",
+		instruction:
+			"This list needs a search box. Craft a prompt that defines 'done' with clear acceptance criteria: filtering is case-insensitive, a result count is shown, and a 'no matches' message appears when nothing matches. Use your own words.",
+		whatUserSees:
+			"A list of five fruit names (Apple, Banana, Cherry, Date, Elderberry). There's no search box, so the full list always shows with no way to filter it.",
+		hint: "Spell out what 'finished' means as a checklist: case-insensitive matching, a visible count, and an empty-state message. Acceptance criteria leave nothing ambiguous.",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n  </head>\n  <body class="p-8 max-w-md">\n    <ul id="fruits" class="space-y-1">\n      <li>Apple</li>\n      <li>Banana</li>\n      <li>Cherry</li>\n      <li>Date</li>\n      <li>Elderberry</li>\n    </ul>\n  </body>\n</html>',
+		grading: {
+			method: "static_analysis + llm_judge",
+			criteria: [
+				{
+					id: "filters_list",
+					description: "A search box filters the list as the user types.",
+					method: "static_analysis",
+					weight: 1,
+					required: true,
+				},
+				{
+					id: "case_insensitive",
+					description: "Filtering matches regardless of letter case.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "shows_count_and_empty_state",
+					description:
+						"A result count is shown, and a clear 'no matches' message appears when nothing matches.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "prompt_listed_criteria",
+					description:
+						"The user's prompt stated explicit acceptance criteria rather than a vague 'add search'.",
+					method: "llm_judge",
+					weight: 1,
+					required: false,
+				},
+			],
+			passingCondition:
+				"All required criteria pass and total weight score is at least 5 out of 6.",
+			perfectScore: "All four criteria pass.",
+		},
+		failState: {
+			condition: "shows_count_and_empty_state fails.",
+			nudge:
+				"Some of your criteria weren't met. List each requirement explicitly — count, empty state, case-insensitive — so AI can check itself against them.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"Acceptance criteria turn 'add search' into a testable spec. When 'done' is defined, AI builds to it and you can verify it in seconds.",
+		},
+		lessonTakeaway:
+			"Define 'done' as a list of acceptance criteria. A clear finish line gives you something concrete to check the output against.",
+	},
+	{
+		id: CODE_IDS[22],
+		title: "Ask for just the diff",
+		instruction:
+			"You only want to change the button color in this component. Craft a prompt that asks AI to make that one change and show only what changed — not the entire file. Use your own words.",
+		whatUserSees:
+			"A pricing card with a title, a price, three feature lines, and a green 'Choose plan' button. Everything is fine except you want the button to be blue.",
+		hint: "Ask for a focused change and a focused answer: 'Change only the button to blue and show me just the lines that changed.' You stay in control of large files this way.",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n  </head>\n  <body class="p-8 bg-gray-100 flex justify-center">\n    <div class="bg-white rounded-xl shadow p-6 w-72">\n      <h2 class="text-lg font-bold">Starter</h2>\n      <p class="text-3xl font-bold my-2">$19<span class="text-base font-normal">/mo</span></p>\n      <ul class="text-gray-600 space-y-1 my-4">\n        <li>5 projects</li>\n        <li>2 GB storage</li>\n        <li>Email support</li>\n      </ul>\n      <button class="bg-green-600 text-white w-full py-2 rounded-lg">Choose plan</button>\n    </div>\n  </body>\n</html>',
+		grading: {
+			method: "llm_judge",
+			criteria: [
+				{
+					id: "prompt_requests_diff_only",
+					description:
+						"The user's prompt asks AI to show only what changed, not the whole file.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "change_is_correct_and_scoped",
+					description:
+						"Only the button color is changed; the rest of the card is left exactly as it was.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "response_is_minimal",
+					description:
+						"The AI response focuses on the changed lines rather than re-printing the entire component.",
+					method: "llm_judge",
+					weight: 2,
+					required: false,
+				},
+			],
+			passingCondition:
+				"All required criteria pass and total weight score is at least 4 out of 6.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition: "change_is_correct_and_scoped fails.",
+			nudge:
+				"AI changed or re-emitted more than the button. Ask for the single change and only the lines that differ.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"Asking for the diff keeps small edits small. On a big file, reviewing three changed lines is far safer than re-reading the whole thing.",
+		},
+		lessonTakeaway:
+			"For small edits, ask AI to change one thing and show only the diff. It's faster to review and harder to break unrelated code.",
+	},
+	{
+		id: CODE_IDS[23],
+		title: "Prompt for accessibility",
+		instruction:
+			"This toolbar uses icon-only buttons with no labels. Craft a prompt that asks AI to make it accessible: every control needs an accessible label, and it must be usable with a keyboard. Name the accessibility needs. Use your own words.",
+		whatUserSees:
+			"A small toolbar with three icon-only buttons (a printer, a heart, and a trash can). A sighted mouse user can guess them, but there are no labels and nothing announces what each does.",
+		hint: "Name the requirements: 'Add accessible labels to each icon button and make sure they're reachable and operable with the keyboard.' Accessibility shows up only when you ask for it.",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n  </head>\n  <body class="p-8">\n    <div class="flex gap-2">\n      <button class="p-2 border rounded">🖨️</button>\n      <button class="p-2 border rounded">❤️</button>\n      <button class="p-2 border rounded">🗑️</button>\n    </div>\n  </body>\n</html>',
+		grading: {
+			method: "static_analysis + llm_judge",
+			criteria: [
+				{
+					id: "buttons_have_labels",
+					description:
+						"Each icon button has an accessible label (e.g., aria-label or visually-hidden text).",
+					method: "static_analysis",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "keyboard_operable",
+					description:
+						"The controls are focusable and operable with the keyboard, with a visible focus state.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "prompt_named_a11y_needs",
+					description:
+						"The user's prompt explicitly named accessibility requirements rather than asking generally to 'improve' the toolbar.",
+					method: "llm_judge",
+					weight: 1,
+					required: false,
+				},
+			],
+			passingCondition:
+				"All required criteria pass and total weight score is at least 4 out of 5.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition: "buttons_have_labels fails.",
+			nudge:
+				"The icons still have no accessible names. Ask specifically for aria-labels and keyboard support — AI won't add them unless you name them.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"Accessibility is a requirement, not a bonus. When you name it in the prompt, AI builds it in from the start instead of leaving people out.",
+		},
+		lessonTakeaway:
+			"Spell out accessibility needs — labels, keyboard support, focus states. AI defaults to the happy path unless you ask for everyone.",
+	},
+	{
+		id: CODE_IDS[24],
+		title: "Prompt for responsive behavior",
+		instruction:
+			"This three-column layout breaks on phones. Craft a prompt that describes how it should behave on mobile versus desktop — for example, one column stacked on small screens and three across on large ones. Use your own words.",
+		whatUserSees:
+			"Three colored boxes sitting side by side in a fixed three-column grid. On a narrow phone screen they squash together instead of stacking.",
+		hint: "Describe the behavior at each size: 'On phones, stack the boxes in one column; on wider screens, show three across.' Name the behavior, not the classes.",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n  </head>\n  <body class="p-8">\n    <div class="grid grid-cols-3 gap-4">\n      <div class="bg-red-200 h-24 rounded"></div>\n      <div class="bg-green-200 h-24 rounded"></div>\n      <div class="bg-blue-200 h-24 rounded"></div>\n    </div>\n  </body>\n</html>',
+		grading: {
+			method: "static_analysis + llm_judge",
+			criteria: [
+				{
+					id: "uses_responsive_layout",
+					description:
+						"The grid uses responsive breakpoints so the column count changes by screen size.",
+					method: "static_analysis",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "stacks_on_mobile",
+					description:
+						"On small screens the boxes stack into a single column instead of staying squashed side by side.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "prompt_described_each_size",
+					description:
+						"The user's prompt described the intended behavior for both small and large screens.",
+					method: "llm_judge",
+					weight: 1,
+					required: false,
+				},
+			],
+			passingCondition:
+				"All required criteria pass and total weight score is at least 4 out of 5.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition: "stacks_on_mobile fails.",
+			nudge:
+				"It still doesn't adapt on small screens. Describe what should happen on mobile and on desktop separately.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"Responsive behavior is a description of intent at each screen size. Tell AI what to do on mobile and on desktop, and it handles the breakpoints.",
+		},
+		lessonTakeaway:
+			"Describe how the layout should behave at different screen sizes. Responsiveness is intent you state, not something AI assumes.",
+	},
+	{
+		id: CODE_IDS[25],
+		title: "Decompose a big feature into steps",
+		instruction:
+			"You want a multi-step checkout flow (cart review, shipping, payment, confirmation). Craft a prompt that asks AI to break this into an ordered build plan and then implement only the first step. Drive the decomposition yourself. Use your own words.",
+		whatUserSees:
+			"A blank page with Tailwind loaded and a single heading, 'Checkout'. The full flow doesn't exist yet — there are no steps, no forms, nothing built.",
+		hint: "Don't ask for the whole flow at once. Ask AI to lay out the steps in order, then build just step one. Sequencing a big feature is its own prompting skill.",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n  </head>\n  <body class="p-8 max-w-lg">\n    <h1 class="text-2xl font-bold">Checkout</h1>\n  </body>\n</html>',
+		grading: {
+			method: "llm_judge",
+			criteria: [
+				{
+					id: "prompt_requests_decomposition",
+					description:
+						"The user's prompt asks AI to break the feature into an ordered sequence of steps before building.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "scopes_to_first_step",
+					description:
+						"The prompt limits the actual build to the first step only, rather than the whole flow.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "output_follows_the_plan",
+					description:
+						"The AI output presents a sequenced plan and implements a coherent first step (e.g., cart review) consistent with it.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+			],
+			passingCondition: "All required criteria pass.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition: "scopes_to_first_step fails.",
+			nudge:
+				"AI tried to build the whole flow at once. Ask it to sequence the steps first, then build only step one.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"Big features fail when you prompt them whole. Decomposing into ordered steps — then building one at a time — keeps each prompt small enough to get right.",
+		},
+		lessonTakeaway:
+			"Break large features into an ordered plan and build one step per prompt. Sequencing is how you keep complex work under control.",
+	},
+	{
+		id: CODE_IDS[26],
+		title: "Ask for tests alongside the code",
+		instruction:
+			"This page has a getDiscountedPrice function with no checks on it. Craft a prompt that asks AI to add inline tests (assertions) that verify it — including edge cases like a 0% and a 100% discount and an invalid input — and to show the results on the page. Use your own words.",
+		whatUserSees:
+			"A page showing 'Price calculator'. Behind it is a getDiscountedPrice(price, percent) function, but nothing tests it — there's no proof it actually works.",
+		hint: "Ask for verification, not just code: 'Add assertions that test this function, including 0% and 100% discounts and an invalid input, and show pass/fail on the page.'",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n  </head>\n  <body class="p-8">\n    <h1 class="text-xl font-bold">Price calculator</h1>\n    <div id="results" class="mt-4 font-mono text-sm"></div>\n    <script>\n      function getDiscountedPrice(price, percent) {\n        return price - (price * percent) / 100;\n      }\n    </script>\n  </body>\n</html>',
+		grading: {
+			method: "static_analysis + llm_judge",
+			criteria: [
+				{
+					id: "has_tests",
+					description:
+						"The code adds assertions or test cases that call getDiscountedPrice and check its output.",
+					method: "static_analysis",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "covers_edge_cases",
+					description:
+						"The tests include edge cases such as a 0% discount, a 100% discount, and an invalid input.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "results_visible",
+					description:
+						"Test results (pass/fail) are shown on the page, not only in the console.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+			],
+			passingCondition: "All required criteria pass.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition: "covers_edge_cases fails.",
+			nudge:
+				"The tests only cover the obvious case. Name the edge cases you want checked — 0%, 100%, and bad input — in your prompt.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"Asking for tests with the code is how you trust AI's output. Tests turn 'looks right' into 'proven right', and they catch the edge cases you'd otherwise ship.",
+		},
+		lessonTakeaway:
+			"Ask AI for tests alongside the implementation, and name the edge cases. Verification you can see beats code you take on faith.",
+	},
+	{
+		id: CODE_IDS[27],
+		title: "Hold AI to a design system",
+		instruction:
+			"This page defines a small set of design tokens (colors and spacing). Craft a prompt that asks AI to build an alert banner using only those tokens — no hard-coded colors or one-off spacing. Hold it to the system. Use your own words.",
+		whatUserSees:
+			"A page with CSS variables defined in :root — brand colors and a spacing scale — but nothing uses them yet. The body is empty below the style block.",
+		hint: "Point AI at the tokens and forbid anything outside them: 'Use only the CSS variables defined in :root — no new hex colors or arbitrary pixel values.' Constrain it to the system.",
+		starterCode:
+			'<html>\n  <head>\n    <style>\n      :root {\n        --color-bg: #fef3c7;\n        --color-text: #92400e;\n        --color-border: #f59e0b;\n        --space-sm: 8px;\n        --space-md: 16px;\n      }\n    </style>\n  </head>\n  <body>\n  </body>\n</html>',
+		grading: {
+			method: "static_analysis + llm_judge",
+			criteria: [
+				{
+					id: "uses_only_tokens",
+					description:
+						"The alert banner styles itself with the defined CSS variables and introduces no new hard-coded colors or arbitrary spacing values.",
+					method: "static_analysis",
+					weight: 3,
+					required: true,
+				},
+				{
+					id: "banner_is_complete",
+					description:
+						"A recognizable alert banner is rendered using the token colors and spacing.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "prompt_enforced_the_system",
+					description:
+						"The user's prompt explicitly restricted AI to the existing tokens and forbade off-system values.",
+					method: "llm_judge",
+					weight: 1,
+					required: false,
+				},
+			],
+			passingCondition:
+				"All required criteria pass and total weight score is at least 5 out of 6.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition: "uses_only_tokens fails.",
+			nudge:
+				"AI introduced colors or spacing outside the system. Tell it explicitly to use only the defined variables and nothing else.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"Real codebases have design systems. When you constrain AI to existing tokens, its output drops straight in instead of drifting off-brand.",
+		},
+		lessonTakeaway:
+			"Constrain AI to your design system — use the defined tokens, forbid one-offs. Consistency comes from the limits you enforce.",
+	},
+	{
+		id: CODE_IDS[28],
+		title: "Debug from the error message",
+		instruction:
+			"Clicking the button throws: 'Uncaught TypeError: Cannot read properties of null (reading addEventListener)'. Craft a prompt that includes the exact error, asks AI for the root cause, and requests the smallest fix — not a rewrite. Use your own words.",
+		whatUserSees:
+			"A page with a 'Save' button. Clicking it does nothing, and the console shows a TypeError about reading addEventListener on null. The script runs before the button exists.",
+		hint: "Paste the exact error and ask for diagnosis first: 'Here's the error — what's the root cause, and what's the smallest change that fixes it?' Don't ask for a rewrite.",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n    <script>\n      document.getElementById(\'saveBtn\').addEventListener(\'click\', function() {\n        alert(\'Saved!\');\n      });\n    </script>\n  </head>\n  <body class="p-8">\n    <button id="saveBtn" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>\n  </body>\n</html>',
+		grading: {
+			method: "llm_judge",
+			criteria: [
+				{
+					id: "prompt_includes_error_and_asks_cause",
+					description:
+						"The user's prompt includes the exact error message and asks AI to identify the root cause.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "identifies_real_cause",
+					description:
+						"The AI response correctly explains that the script runs before the button exists in the DOM.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "fix_is_minimal",
+					description:
+						"The fix is a small, targeted change (e.g., moving the script or waiting for DOMContentLoaded) rather than a full rewrite.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+			],
+			passingCondition: "All required criteria pass.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition: "fix_is_minimal fails.",
+			nudge:
+				"AI rewrote more than it needed to. Give it the exact error, ask for the root cause, and request the smallest possible fix.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"The error message is the most useful thing you can hand AI. Paste it verbatim, ask for the cause, and you get a precise fix instead of a guess.",
+		},
+		lessonTakeaway:
+			"Debug by pasting the exact error and asking for the root cause and the smallest fix. Specific symptoms get specific cures.",
+	},
+	{
+		id: CODE_IDS[29],
+		title: "Write a reusable prompt template",
+		instruction:
+			"You keep building similar components. Craft a reusable prompt template — with clearly marked placeholders for the parts that change (the component, its fields, its style, and the stack) — then use it once to build a 'testimonial' card. Use your own words.",
+		whatUserSees:
+			"A blank page with Tailwind loaded. Nothing is built. This is the capstone: you're writing a prompt you could reuse for any component, then proving it on a testimonial card.",
+		hint: "Build a template, not a one-off: 'Build a [component] using [stack] with [fields], styled [style direction], handling [edge cases].' Then fill the brackets for a testimonial card.",
+		starterCode:
+			'<html>\n  <head>\n    <script src="https://cdn.tailwindcss.com"></script>\n  </head>\n  <body class="p-8 bg-gray-100">\n  </body>\n</html>',
+		grading: {
+			method: "llm_judge",
+			criteria: [
+				{
+					id: "prompt_is_a_template",
+					description:
+						"The user's prompt is written as a reusable template with clearly marked placeholders for the parts that change.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "template_covers_key_variables",
+					description:
+						"The template includes placeholders for the component, its content or fields, its style, and the tech stack.",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+				{
+					id: "produces_testimonial_card",
+					description:
+						"Filling the template once produces a complete, styled testimonial card (quote, name, role, and avatar or initials).",
+					method: "llm_judge",
+					weight: 2,
+					required: true,
+				},
+			],
+			passingCondition: "All required criteria pass.",
+			perfectScore: "All three criteria pass.",
+		},
+		failState: {
+			condition: "prompt_is_a_template fails.",
+			nudge:
+				"That's a one-off prompt, not a template. Mark the parts that change as placeholders so you could reuse it for any component.",
+		},
+		successState: {
+			condition: "Passing condition is met.",
+			feedback:
+				"A reusable prompt template is the payoff of everything in this track: stack, scope, examples, constraints, and edge cases captured once and reused for every component you build next.",
+		},
+		lessonTakeaway:
+			"Turn prompts you reuse into templates with placeholders. The best prompters build a library, not a pile of one-offs.",
 	},
 ];
 

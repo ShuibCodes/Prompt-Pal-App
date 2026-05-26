@@ -17,9 +17,10 @@ const ENTITLEMENT_KEY =
 	process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_KEY?.trim() || "PromptPal Pro";
 const TERMS_OF_USE_URL =
 	process.env.EXPO_PUBLIC_TERMS_OF_USE_URL?.trim() ||
-	"https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
+	"https://promptpal-website.vercel.app/terms-and-conditions";
 const PRIVACY_POLICY_URL =
-	process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL?.trim() || null;
+	process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL?.trim() ||
+	"https://promptpal-website.vercel.app/privacy-policy";
 
 let isConfigured = false;
 let configuredAppUserId: string | null = null;

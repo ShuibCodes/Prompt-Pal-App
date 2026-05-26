@@ -3,7 +3,7 @@ import { Button } from "./Button";
 import { Card } from "./Card";
 import { RadarChart } from "./RadarChart";
 
-export type ModuleType = "image" | "code" | "copywriting";
+export type ModuleType = "image" | "code" | "copywriting" | "agent";
 
 /** S3: Returns subtitle label for ResultModal by module type (for unit tests). */
 export function getResultModalSubtitleLabel(moduleType?: ModuleType): string {
@@ -11,7 +11,9 @@ export function getResultModalSubtitleLabel(moduleType?: ModuleType): string {
 		? "SIMILARITY SCORE"
 		: moduleType === "copywriting"
 			? "COPY SCORE"
-			: "LOGIC VALIDATION";
+			: moduleType === "agent"
+				? "TASK MATCH"
+				: "LOGIC VALIDATION";
 }
 
 interface TestCaseResult {

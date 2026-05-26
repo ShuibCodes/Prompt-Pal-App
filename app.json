@@ -3,7 +3,7 @@
     "name": "PromptPal",
     "slug": "PromptPal",
     "version": "1.0.0",
-    "description": "Master AI prompt engineering through interactive challenges for coding, copywriting, and image generation.",
+    "description": "Master AI prompt engineering through interactive challenges for coding, image generation, and AI agents.",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "scheme": "promptpal",

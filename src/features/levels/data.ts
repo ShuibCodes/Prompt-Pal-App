@@ -79,6 +79,7 @@ const MODULE_ID_BY_TYPE: Record<string, string> = {
 	image: "image-generation",
 	code: "coding-logic",
 	copywriting: "copywriting",
+	agent: "agent",
 };
 
 const getScaffoldTypeForDifficulty = (

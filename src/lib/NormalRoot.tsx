@@ -254,6 +254,10 @@ function AppInitializer() {
 					<Stack.Screen name="paywall" />
 					<Stack.Screen name="game" />
 					<Stack.Screen name="library/[resourceId]" />
+					<Stack.Screen
+						name="delete-account"
+						options={{ animation: "slide_from_right" }}
+					/>
 				</Stack>
 				<StatusBar style="light" />
 			</ErrorBoundary>

@@ -5,7 +5,7 @@ import { convexHttpClient } from "@/lib/convex-client";
 import { api } from "../../../convex/_generated/api.js";
 import { logger } from "@/lib/logger";
 
-export type ChallengeType = "image" | "code" | "copywriting";
+export type ChallengeType = "image" | "code" | "copywriting" | "agent";
 
 // Data-only version of GameState for backend communication
 export interface GameStateData {
@@ -62,6 +62,9 @@ export interface Level {
 	failState?: { condition?: string; nudge?: string };
 	successState?: { condition?: string; feedback?: string };
 	lessonTakeaway?: string;
+
+	// Agent Challenge specific — plain-text brief shown as the only visible context.
+	agentBrief?: string;
 
 	// Copywriting Challenge specific
 	starterContext?: Record<string, unknown>; // For llm_judge lessons

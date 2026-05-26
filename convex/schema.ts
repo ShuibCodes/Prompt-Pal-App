@@ -122,6 +122,7 @@ export default defineSchema({
 			v.literal("code"),
 			v.literal("image"),
 			v.literal("copywriting"),
+			v.literal("agent"),
 		),
 		mode: v.union(
 			v.literal("teaching"),
@@ -368,6 +369,7 @@ export default defineSchema({
 			v.literal("image"),
 			v.literal("code"),
 			v.literal("copywriting"),
+			v.literal("agent"),
 		),
 		title: v.string(),
 		description: v.optional(v.string()),
@@ -409,6 +411,12 @@ export default defineSchema({
 		failState: v.optional(v.any()),
 		successState: v.optional(v.any()),
 		lessonTakeaway: v.optional(v.string()),
+
+		// Agent challenge fields
+		// Plain-text description of what the AI agent does — the only visible
+		// context for agent-type levels. The hidden judge rubric lives in
+		// `whatUserSees` (reused), and `grading.criteria` carries the rubric dims.
+		agentBrief: v.optional(v.string()),
 
 		// Copywriting challenge fields
 		starterContext: v.optional(v.any()), // For llm_judge lessons: brand, audience, originalEmail, etc.
@@ -619,9 +627,10 @@ export default defineSchema({
 			v.literal("image"),
 			v.literal("code"),
 			v.literal("copywriting"),
+			v.literal("agent"),
 		),
 		levelId: v.optional(v.string()), // Associated level to complete
-		type: v.string(), // 'image', 'code', 'copywriting'
+		type: v.string(), // 'image', 'code', 'copywriting', 'agent'
 		category: v.string(),
 		requirements: dailyQuestRequirements, // Specific requirements for quest
 		difficulty: v.string(), // 'easy', 'medium', 'hard'

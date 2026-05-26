@@ -28,23 +28,8 @@ const getDefaultLearningModules = (): LearningModule[] => [
 		format: "interactive",
 		estimatedTime: 15,
 	},
-	{
-		id: "copywriting",
-		category: "Writing",
-		title: "Copywriting",
-		level: "Beginner",
-		topic: "Marketing",
-		currentLevelName: "Product Headline",
-		currentLevelOrder: 1,
-		progress: 0,
-		icon: "create",
-		thumbnail: getModuleThumbnail("Copywriting", "Writing", "Marketing"),
-		accentColor: "bg-purple-500",
-		buttonText: "Start Writing",
-		type: "module",
-		format: "interactive",
-		estimatedTime: 20,
-	},
+	// Copywriting module removed from v1 (out of scope). Data/code retained
+	// elsewhere for a possible future release.
 	{
 		id: "image-generation",
 		category: "Design",
@@ -93,7 +78,7 @@ export interface DailyQuest {
 	timeRemaining: number; // hours
 	completed: boolean;
 	expiresAt: number; // timestamp
-	questType?: "image" | "code" | "copywriting";
+	questType?: "image" | "code" | "copywriting" | "agent";
 }
 
 export interface UserProgress {

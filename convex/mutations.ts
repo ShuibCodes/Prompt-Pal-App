@@ -20,6 +20,7 @@ const getIsoDateString = (date: Date): string =>
 	date.toISOString().split("T")[0];
 
 import { questLevelsData } from "./quest_levels_data";
+import { imageLevels, codeLevels, agentLevels } from "./levels_data";
 
 const pickRandom = <T>(items: readonly T[]): T => {
 	return items[Math.floor(Math.random() * items.length)];
@@ -1371,6 +1372,7 @@ export const createLevel = internalMutation({
 			v.literal("image"),
 			v.literal("code"),
 			v.literal("copywriting"),
+			v.literal("agent"),
 		),
 		title: v.string(),
 		description: v.optional(v.string()),
@@ -1409,6 +1411,8 @@ export const createLevel = internalMutation({
 		failState: v.optional(v.any()),
 		successState: v.optional(v.any()),
 		lessonTakeaway: v.optional(v.string()),
+		// Agent level fields
+		agentBrief: v.optional(v.string()),
 		// Copywriting level fields
 		starterContext: v.optional(v.any()),
 		briefTitle: v.optional(v.string()),
@@ -1471,7 +1475,12 @@ export const updateLevel = internalMutation({
 		id: v.string(),
 		appId: v.string(),
 		type: v.optional(
-			v.union(v.literal("image"), v.literal("code"), v.literal("copywriting")),
+			v.union(
+				v.literal("image"),
+				v.literal("code"),
+				v.literal("copywriting"),
+				v.literal("agent"),
+			),
 		),
 		title: v.optional(v.string()),
 		description: v.optional(v.string()),
@@ -1512,6 +1521,8 @@ export const updateLevel = internalMutation({
 		failState: v.optional(v.any()),
 		successState: v.optional(v.any()),
 		lessonTakeaway: v.optional(v.string()),
+		// Agent level fields
+		agentBrief: v.optional(v.string()),
 		// Copywriting level fields
 		starterContext: v.optional(v.any()),
 		briefTitle: v.optional(v.string()),
@@ -1899,6 +1910,7 @@ export const createDailyQuest = internalMutation({
 			v.literal("image"),
 			v.literal("code"),
 			v.literal("copywriting"),
+			v.literal("agent"),
 		),
 		type: v.string(),
 		category: v.string(),
@@ -1941,15 +1953,8 @@ export const generateDailyQuestPool = internalMutation({
 		tomorrow.setUTCHours(0, 0, 0, 0);
 		const expiresAt = tomorrow.getTime();
 
-		// Delete all image quests to ensure they are fully removed from the pool
-		const imageQuests = await ctx.db
-			.query("dailyQuests")
-			.withIndex("by_type", (q) => q.eq("questType", "image"))
-			.collect();
-
-		await Promise.all(imageQuests.map((q) => ctx.db.delete(q._id)));
-
-		// Deactivate all other active quests
+		// Deactivate all currently-active quests (no type is deleted — the pool now
+		// rotates across all three types instead of pruning image quests).
 		const activeQuests = await ctx.db
 			.query("dailyQuests")
 			.withIndex("by_app", (q) => q.eq("appId", appId))
@@ -1965,8 +1970,37 @@ export const generateDailyQuestPool = internalMutation({
 			),
 		);
 
-		// Pick one random quest from the combined pool (coding + copywriting)
-		const questLevel = pickRandom(questLevelsData);
+		// Rotate the daily quest type evenly across coding / image / agent by
+		// day-of-cycle: coding one day, image the next, agent the day after.
+		// The type is deterministic per UTC day; the specific level within that
+		// type is picked at random from that type's pool.
+		type DailyQuestSource = {
+			id: string;
+			type: "image" | "code" | "agent" | "copywriting";
+			title: string;
+			description?: string;
+			instruction?: string;
+			points?: number;
+			difficulty: "beginner" | "intermediate" | "advanced";
+		};
+		const rotation: Array<{
+			type: "code" | "image" | "agent";
+			pool: ReadonlyArray<DailyQuestSource>;
+		}> = [
+			{ type: "code", pool: codeLevels as ReadonlyArray<DailyQuestSource> },
+			{ type: "image", pool: imageLevels as ReadonlyArray<DailyQuestSource> },
+			{ type: "agent", pool: agentLevels as ReadonlyArray<DailyQuestSource> },
+		];
+		const dayIndex = Math.floor(now / 86_400_000);
+		const cycleSlot =
+			rotation[((dayIndex % rotation.length) + rotation.length) % rotation.length];
+		// Fall back to the questLevelsData pool only if the rotated type has no
+		// seeded levels, so the daily quest is never empty.
+		const pool: ReadonlyArray<DailyQuestSource> =
+			cycleSlot.pool.length > 0
+				? cycleSlot.pool
+				: (questLevelsData as ReadonlyArray<DailyQuestSource>);
+		const questLevel = pickRandom(pool);
 		const id = `daily-${today}-quest`;
 
 		const existing = await ctx.db
@@ -1980,7 +2014,7 @@ export const generateDailyQuestPool = internalMutation({
 			title: questLevel.title,
 			description:
 				questLevel.description ?? questLevel.instruction ?? questLevel.title,
-			xpReward: questLevel.points,
+			xpReward: questLevel.points ?? 100,
 			questType: questLevel.type,
 			levelId: questLevel.id,
 			type: questLevel.type,

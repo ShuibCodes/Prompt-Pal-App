@@ -125,6 +125,46 @@ export function buildQuestHelpContent(
 		};
 	}
 
+	if (level.type === "agent") {
+		return {
+			eyebrow: "AGENT CHALLENGE",
+			headline,
+			summary:
+				"Read what the agent does, then write the prompt that makes it act reliably.",
+			referenceLabel: "Agent Brief",
+			sections: [
+				{
+					title: "The Agent",
+					items: uniqueItems([
+						level.agentBrief ||
+							level.description ||
+							"Write the prompt that instructs this agent to do its job well.",
+					]),
+				},
+				{
+					title: "A Strong Agent Prompt Covers",
+					items: uniqueItems([
+						"The trigger or input the agent acts on.",
+						"The decision rules it should apply.",
+						"The output format it should produce.",
+						"The edge cases it must anticipate.",
+						"What it must NOT do on its own.",
+						...(level.promptChecklist ?? []),
+						passingScoreLabel,
+					]),
+				},
+				...(visibleHints.length > 0
+					? [
+							{
+								title: "Prompt Signals To Consider",
+								items: uniqueItems(visibleHints),
+							},
+						]
+					: []),
+			],
+		};
+	}
+
 	return {
 		eyebrow: "IMAGE CHALLENGE",
 		headline,

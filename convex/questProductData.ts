@@ -1,5 +1,5 @@
-export type TrackId = "coding" | "image-generation" | "copywriting";
-export type LessonType = "code" | "image" | "copywriting";
+export type TrackId = "coding" | "image-generation" | "copywriting" | "agent";
+export type LessonType = "code" | "image" | "copywriting" | "agent";
 export type LessonMode = "teaching" | "practice" | "milestone" | "boss" | "daily";
 export type NodeType = "standard" | "milestone" | "boss" | "reward";
 
@@ -27,6 +27,7 @@ export type LegacyLevel = {
 	failState?: unknown;
 	successState?: unknown;
 	lessonTakeaway?: string;
+	agentBrief?: string;
 	starterContext?: unknown;
 	briefTitle?: string;
 	briefProduct?: string;
@@ -158,13 +159,13 @@ export type HomeHeaderStatsInput = {
 export const DEFAULT_LEARNING_TRACKS: LearningTrackSeed[] = [
 	{
 		id: "image-generation",
-		title: "Image Generation",
+		title: "Image",
 		subtitle: "Direct visual outputs with precision",
 		description: "Practice visual prompting through target-image quests.",
 		iconKey: "image",
 		themeKey: "amber",
 		sortOrder: 1,
-		isActive: false,
+		isActive: true,
 	},
 	{
 		id: "coding",
@@ -184,6 +185,19 @@ export const DEFAULT_LEARNING_TRACKS: LearningTrackSeed[] = [
 		iconKey: "copy",
 		themeKey: "blue",
 		sortOrder: 3,
+		// Copywriting is out of scope for v1 — hidden from the track switcher and
+		// all user-facing surfaces. Lessons/data remain for a future release.
+		isActive: false,
+	},
+	{
+		id: "agent",
+		title: "Agent",
+		subtitle: "Instruct agents to act reliably",
+		description:
+			"Write the prompts that make AI agents trigger, decide, and act without going off the rails.",
+		iconKey: "agent",
+		themeKey: "purple",
+		sortOrder: 4,
 		isActive: true,
 	},
 ];
@@ -307,6 +321,9 @@ export function getTrackIdForLessonType(type: LessonType): TrackId {
 	if (type === "copywriting") {
 		return "copywriting";
 	}
+	if (type === "agent") {
+		return "agent";
+	}
 	return "coding";
 }
 
@@ -369,6 +386,8 @@ export function buildLessonDefinitionsFromLegacyLevels(
 					description: level.description ?? level.instruction ?? objective,
 					instruction: level.instruction,
 					requirementBrief: level.requirementBrief,
+					// Agent challenge: the plain-text brief is the only visible context.
+					agentBrief: level.agentBrief,
 					briefProduct: level.briefProduct,
 					briefTarget: level.briefTarget,
 					briefTone: level.briefTone,
@@ -379,6 +398,7 @@ export function buildLessonDefinitionsFromLegacyLevels(
 				targetPayload: compactPayload({
 					targetImageUrl: level.targetImageUrl,
 					requirementImage: level.requirementImage,
+					// Hidden agent rubric — flows to the server-side evaluator, never shown.
 					whatUserSees: level.whatUserSees,
 					style: level.style,
 					requiredElements: level.requiredElements,

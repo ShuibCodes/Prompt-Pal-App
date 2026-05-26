@@ -17,7 +17,7 @@ interface PromptQualityInput {
 	publicReferences: Array<string | undefined>;
 	checklist?: string[];
 	strategicSignals: string[];
-	domain: "code" | "copy" | "image";
+	domain: "code" | "copy" | "image" | "agent";
 }
 
 function clamp(value: number, min = 0, max = 100): number {
@@ -75,7 +75,9 @@ function assessPromptQuality({
 				? "Your prompt is too thin. Add concrete instructions, constraints, and edge cases."
 				: domain === "copy"
 					? "Your prompt is too thin. Add audience, tone, and structure guidance."
-					: "Your prompt is too thin. Add subject, composition, lighting, and style guidance.",
+					: domain === "agent"
+						? "Your prompt is too thin. Define the trigger, the decision rules, the output format, and what the agent must not do."
+						: "Your prompt is too thin. Add subject, composition, lighting, and style guidance.",
 		);
 	}
 
@@ -85,7 +87,9 @@ function assessPromptQuality({
 				? "Your prompt mostly repeats the on-screen brief. Add implementation constraints and failure cases."
 				: domain === "copy"
 					? "Your prompt mostly repeats the brief. Add messaging strategy, structure, and persuasion guidance."
-					: "Your prompt mostly repeats the brief. Add composition, camera, lighting, and material details.",
+					: domain === "agent"
+						? "Your prompt mostly repeats the agent brief. Add concrete decision rules, output format, edge cases, and guardrails."
+						: "Your prompt mostly repeats the brief. Add composition, camera, lighting, and material details.",
 		);
 	}
 
@@ -95,7 +99,9 @@ function assessPromptQuality({
 				? "Ask for more of the success criteria explicitly instead of relying on the model to infer them."
 				: domain === "copy"
 					? "Be more explicit about the messaging requirements you want the model to satisfy."
-					: "Be more explicit about the visual requirements you want the model to satisfy.",
+					: domain === "agent"
+						? "Cover more of the agent's job explicitly — input, rules, output, and limits — instead of leaving it to infer."
+						: "Be more explicit about the visual requirements you want the model to satisfy.",
 		);
 	}
 
@@ -105,7 +111,9 @@ function assessPromptQuality({
 				? "Mention output format, constraints, and how to handle tricky inputs."
 				: domain === "copy"
 					? "Mention audience, tone, CTA, and how the copy should be structured."
-					: "Mention subject placement, lighting, perspective, background, and visual style.",
+					: domain === "agent"
+						? "Name the trigger, decision rules, output format, edge cases, and the behaviour the agent must avoid."
+						: "Mention subject placement, lighting, perspective, background, and visual style.",
 		);
 	}
 
@@ -158,6 +166,32 @@ export function assessCopyPromptQuality(input: {
 			"objection",
 			"variant",
 			"persona",
+		],
+	});
+}
+
+export function assessAgentPromptQuality(input: {
+	userPrompt: string;
+	publicReferences: Array<string | undefined>;
+	checklist?: string[];
+}): PromptQualityAssessment {
+	return assessPromptQuality({
+		...input,
+		domain: "agent",
+		strategicSignals: [
+			"trigger",
+			"input",
+			"when",
+			"rule",
+			"decision",
+			"if",
+			"output",
+			"format",
+			"edge case",
+			"otherwise",
+			"do not",
+			"must not",
+			"never",
 		],
 	});
 }

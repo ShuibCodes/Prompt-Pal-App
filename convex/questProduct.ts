@@ -389,7 +389,7 @@ export const getQuestHome = query({
 			progress,
 			activeNode,
 			activeLesson,
-			nodes: roadmapNodes.slice(0, 12),
+			nodes: roadmapNodes,
 			hearts: 5,
 			headerStats: buildHomeHeaderStats({
 				currentStreak: stats.currentStreak,

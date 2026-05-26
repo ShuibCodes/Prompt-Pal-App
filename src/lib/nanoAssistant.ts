@@ -93,6 +93,12 @@ ${levelData.briefTarget ? `Target audience: ${levelData.briefTarget}` : ""}
 ${levelData.briefTone ? `Desired tone: ${levelData.briefTone}` : ""}
 Focus hints on: audience engagement, tone, call-to-action, or persuasive techniques.`;
 
+		case "agent":
+			return `${basePrompt}
+This is an AI AGENT challenge. The user reads a description of what an agent does and writes the prompt that instructs that agent.
+${levelData.agentBrief ? `The agent: ${levelData.agentBrief}` : ""}
+Focus hints on the five dimensions of a good agent prompt: the trigger or input, the decision rules, the output format, the edge cases, and the behaviour the agent must NOT do. Never reveal the hidden rubric — nudge toward whichever dimension is missing.`;
+
 		default:
 			return basePrompt;
 	}
@@ -207,6 +213,25 @@ function buildAllHints(moduleType: ChallengeType, levelData: Level): string[] {
 		allHints.push(
 			"Consider adding urgency or scarcity elements.",
 			"Make sure there's a clear value proposition.",
+		);
+	} else if (moduleType === "agent") {
+		allHints.push(
+			"Start with the trigger: what event or input sets this agent off?",
+			"Spell out the decision rules — what exactly should it do in each case?",
+			"Define the output format: what shape should its result take?",
+			"Name the edge cases — missing data, duplicates, or ambiguous input.",
+			"Add guardrails: state clearly what the agent must never do on its own.",
+		);
+
+		if (levelData.agentBrief) {
+			allHints.push(
+				`Re-read what the agent does: "${levelData.agentBrief.slice(0, 60)}..." — does your prompt cover its whole job?`,
+			);
+		}
+
+		allHints.push(
+			"Don't just restate the brief — turn it into precise instructions the agent can follow.",
+			"For anything irreversible, tell the agent to flag for a human instead of acting alone.",
 		);
 	} else {
 		// Generic fallback

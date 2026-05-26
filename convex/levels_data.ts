@@ -54,35 +54,43 @@ const imageLessonScaffolds: Record<
 	"image-7-medium": {
 		checklistItems: ["Color palette", "Style reference", "Energy or mood", "Abstract shapes"],
 	},
+	"image-8-hard": {
+		checklistItems: ["Subject", "Drawing style", "Background", "Annotations or detail", "Symmetry"],
+	},
+	"image-9-hard": {
+		checklistItems: ["Main subjects", "Setting", "Lighting and colour", "Mood", "Composition"],
+	},
+	"image-10-hard": {
+		checklistItems: ["Product", "Effect or motion", "Background", "Lighting", "Composition"],
+	},
 };
 
 const imageLevelsBase = [
-	// EASY LEVELS (1-3)
+	// EASY LEVELS (1-3): one clear subject, simple. passingScore 70, 3-4 broad keywords.
 	{
 		id: "image-1-easy",
 		type: "image" as const,
 		title: "Color Match",
-		description:
-			"Generate a simple solid-colored image that matches the target",
+		description: "Recreate a single flat, solid colour that fills the whole frame.",
 		difficulty: "beginner" as const,
 		passingScore: 70,
 		unlocked: true,
 		order: 1,
-		targetImageUrl:
-			"https://diligent-terrier-105.convex.cloud/api/storage/kg2czbmac17yhxehjed4jh8fh9809b5w",
-		hiddenPromptKeywords: [],
+		hiddenPromptKeywords: ["solid colour", "green", "flat", "fills the frame"],
 		style: "Minimalist",
+		whatUserSees:
+			"A single flat, solid muted forest-green colour filling the entire frame edge to edge. No subject, objects, gradient or texture — just one even green tone, like a paint swatch.",
 		points: 100,
 		hints: [
-			"Think about the exact color and shade needed",
-			"Simple descriptions often work better for solid colors",
-			"Include lighting context if needed (e.g., 'soft lighting')",
+			"Name the exact colour and how light or dark it is",
+			"Say it should fill the whole frame evenly",
+			"Keep it simple — no objects or scenery",
 		],
 		estimatedTime: 2,
-		tags: ["basics", "color", "simple"],
+		tags: ["basics", "colour", "simple"],
 		learningObjectives: [
 			"Learn basic prompt structure",
-			"Understand color description",
+			"Describe a colour precisely",
 			"Practice simplicity in prompting",
 		],
 	},
@@ -90,255 +98,315 @@ const imageLevelsBase = [
 		id: "image-2-easy",
 		type: "image" as const,
 		title: "Basic Shape",
-		description: "Create an image of a simple geometric shape",
+		description: "Generate a single simple 3D shape on a plain background.",
 		difficulty: "beginner" as const,
 		passingScore: 70,
 		unlocked: true,
 		order: 2,
-		targetImageUrl:
-			"https://diligent-terrier-105.convex.cloud/api/storage/kg2fsmceyg0q50scm74zqkgy71809vhj",
-		hiddenPromptKeywords: ["triangle", "square", "circle"],
-		style: "Clean",
+		hiddenPromptKeywords: ["sphere", "grey", "plain background", "soft shadow"],
+		style: "3D studio render",
+		whatUserSees:
+			"A single smooth matte light-grey 3D sphere, centred on a plain neutral-grey background. Soft even lighting from above with a gentle shadow beneath. Only one object in frame, nothing else.",
 		points: 100,
 		hints: [
-			"Describe the shape precisely without naming it",
-			"Include details like edges, lighting, and texture",
-			"Consider the background and composition",
+			"Describe the shape and that it is three-dimensional",
+			"Mention the plain background and the soft shadow",
+			"Note the matte finish and soft, even lighting",
 		],
 		estimatedTime: 3,
-		tags: ["basics", "shapes", "composition"],
+		tags: ["basics", "shape", "composition"],
 		learningObjectives: [
-			"Practice descriptive prompting",
-			"Learn to describe without direct naming",
-			"Understand basic composition",
+			"Practice describing form and dimension",
+			"Learn to specify background and lighting",
+			"Understand simple composition",
 		],
 	},
 	{
 		id: "image-3-easy",
 		type: "image" as const,
-		title: "Simple Object",
-		description: "Generate an everyday object with specific characteristics",
+		title: "Everyday Object",
+		description: "Recreate a single real-world object as a clean product shot.",
 		difficulty: "beginner" as const,
 		passingScore: 70,
 		unlocked: true,
 		order: 3,
-		targetImageUrl:
-			"https://diligent-terrier-105.convex.cloud/api/storage/kg2ec82prj9f66jj0x7w5jc429808z0q",
-		hiddenPromptKeywords: ["coffee mug", "cup"],
+		hiddenPromptKeywords: [
+			"leather hiking boot",
+			"red laces",
+			"on a rock",
+			"blurred forest background",
+		],
 		style: "Product photography",
+		whatUserSees:
+			"A single brown leather hiking boot with red laces and a chunky black sole, sitting on a grey granite rock. Soft natural daylight and a softly blurred pine-forest and mountain background. The boot is the clear single subject, shown from the side.",
 		points: 100,
 		hints: [
-			"Focus on materials and texture",
-			"Describe the object's main features",
-			"Include context like 'on a wooden table' if visible",
+			"Name the object and its main material and colour",
+			"Describe what it rests on and the background",
+			"Mention the lighting and that the background is blurred",
 		],
 		estimatedTime: 4,
-		tags: ["objects", "materials", "texture"],
+		tags: ["objects", "materials", "product"],
 		learningObjectives: [
-			"Learn to describe objects by features",
-			"Practice material descriptions",
-			"Understand context importance",
+			"Describe an object by its features",
+			"Practice material and setting descriptions",
+			"Understand depth of field (blurred background)",
 		],
 	},
 
-	// MEDIUM LEVELS (4-7)
+	// MEDIUM LEVELS (4-7): scene + style + composition. passingScore 75, 5-7 keywords.
 	{
 		id: "image-4-medium",
 		type: "image" as const,
-		title: "Architectural Rendering",
-		description: "Create a detailed architectural visualization of a building",
+		title: "Architecture in Snow",
+		description: "Compose a modern building within a dramatic natural setting.",
 		difficulty: "intermediate" as const,
 		passingScore: 75,
 		unlocked: false,
 		order: 4,
-		targetImageUrl:
-			"https://diligent-terrier-105.convex.cloud/api/storage/kg2czbmac17yhxehjed4jh8fh9809b5w",
-		hiddenPromptKeywords: ["modern", "glass", "geometric", "clean lines"],
-		style: "Architectural visualization",
+		hiddenPromptKeywords: [
+			"modern cabin",
+			"floor-to-ceiling glass",
+			"wood cladding",
+			"snowy mountainside",
+			"pine trees",
+			"warm interior light",
+		],
+		style: "Architectural photography",
+		whatUserSees:
+			"A small modern cabin with warm wooden cladding and floor-to-ceiling glass walls, cantilevered over a steep snow-covered mountainside. Pine trees and misty peaks behind, soft overcast winter light, and warm light glowing from inside the glass. A wide exterior architectural shot.",
 		points: 150,
 		hints: [
-			"Describe structural elements and materials",
-			"Include lighting and perspective details",
-			"Consider scale and proportions",
+			"Describe the building's form and materials",
+			"Set the scene — where it sits and what surrounds it",
+			"Mention the weather, light, and the glow from inside",
 		],
 		estimatedTime: 8,
-		tags: ["architecture", "buildings", "technical"],
+		tags: ["architecture", "scene", "lighting"],
 		learningObjectives: [
-			"Learn to describe complex technical subjects",
-			"Practice structural and material prompting",
-			"Understand architectural visualization techniques",
+			"Describe a subject within an environment",
+			"Combine materials, setting, and lighting",
+			"Practice intermediate scene composition",
 		],
 	},
 	{
 		id: "image-5-medium",
 		type: "image" as const,
-		title: "Landscape Scene",
-		description: "Generate a scenic landscape with specific time of day",
+		title: "Landscape at Dusk",
+		description: "Capture a wide landscape with a specific time of day and mood.",
 		difficulty: "intermediate" as const,
 		passingScore: 75,
 		unlocked: false,
 		order: 5,
-		targetImageUrl:
-			"https://diligent-terrier-105.convex.cloud/api/storage/kg23j6335pwdzwxjr1dpenpaxn809804",
-		hiddenPromptKeywords: ["sunset", "mountains", "lake"],
-		style: "Photorealistic",
+		hiddenPromptKeywords: [
+			"sand dunes",
+			"desert",
+			"twilight",
+			"crescent moon",
+			"blue-to-orange sky",
+			"soft shadows",
+		],
+		style: "Photorealistic landscape",
+		whatUserSees:
+			"Rolling desert sand dunes at twilight. A deep blue sky high up fading to warm orange at the horizon, a thin crescent moon, and soft shadows tracing the curved ridgelines of the dunes. Distant low hills, calm and minimal — a wide landscape shot.",
 		points: 150,
 		hints: [
-			"Describe the lighting and atmosphere",
-			"Include foreground, midground, and background elements",
-			"Use words like 'golden hour' or 'dramatic clouds'",
+			"Name the landscape and the time of day",
+			"Describe the sky's colours and any light source",
+			"Mention how light shapes the dunes (shadows, ridgelines)",
 		],
 		estimatedTime: 8,
-		tags: ["landscapes", "lighting", "atmosphere"],
+		tags: ["landscape", "atmosphere", "lighting"],
 		learningObjectives: [
-			"Learn atmospheric prompting",
-			"Practice scene composition",
-			"Understand lighting descriptions",
+			"Describe atmosphere and time of day",
+			"Control colour and lighting in a scene",
+			"Practice wide landscape composition",
 		],
 	},
 	{
 		id: "image-6-medium",
 		type: "image" as const,
-		title: "Food Photography",
-		description: "Create a professional food image with specific styling",
+		title: "Food & Drink",
+		description: "Style an appetizing commercial beverage shot.",
 		difficulty: "intermediate" as const,
 		passingScore: 75,
 		unlocked: false,
 		order: 6,
-		targetImageUrl:
-			"https://diligent-terrier-105.convex.cloud/api/storage/kg2deg90t101ge2cgzkdj2hjt9808b2v",
-		hiddenPromptKeywords: ["burger", "fries", "garnish"],
+		hiddenPromptKeywords: [
+			"iced tea",
+			"tall glass",
+			"ice cubes",
+			"lemon slice",
+			"mint",
+			"wooden table",
+			"condensation",
+		],
 		style: "Commercial food photography",
+		whatUserSees:
+			"A tall clear glass of iced tea on a wooden table outdoors. Ice cubes inside, a lemon slice on the rim, a sprig of mint, and a metal straw. Condensation droplets run down the glass, warm afternoon light, and a soft blurred background — an appetizing commercial beverage shot.",
 		points: 150,
 		hints: [
-			"Describe textures and garnish details",
-			"Include plating and presentation",
-			"Mention lighting type (soft, backlit, etc.)",
+			"Name the drink and the glass it is in",
+			"List the garnishes and details (ice, lemon, mint, straw)",
+			"Describe the surface, lighting, and background",
 		],
 		estimatedTime: 7,
 		tags: ["food", "commercial", "styling"],
 		learningObjectives: [
-			"Learn professional food photography prompts",
-			"Practice texture descriptions",
-			"Understand styling terminology",
+			"Describe a subject with several supporting details",
+			"Practice commercial styling language",
+			"Understand garnish, texture, and lighting cues",
 		],
 	},
 	{
 		id: "image-7-medium",
 		type: "image" as const,
-		title: "Abstract Art",
-		description:
-			"Generate an abstract piece with specific color palette and style",
+		title: "Abstract Composition",
+		description: "Create a non-representational image from a colour palette and shapes.",
 		difficulty: "intermediate" as const,
 		passingScore: 75,
 		unlocked: false,
 		order: 7,
-		targetImageUrl:
-			"https://diligent-terrier-105.convex.cloud/api/storage/kg2cf5vnf8y81xw1tj40w8g9q5809gz5",
-		hiddenPromptKeywords: ["blue", "orange", "geometric"],
-		style: "Abstract expressionism",
+		hiddenPromptKeywords: [
+			"abstract",
+			"overlapping circles",
+			"translucent",
+			"teal",
+			"mustard",
+			"burnt orange",
+			"retro palette",
+		],
+		style: "Mid-century abstract",
+		whatUserSees:
+			"A flat abstract composition of overlapping translucent circles and ellipses in a warm retro palette — teal, mustard gold, burnt orange, and olive green — layered over a warm gradient background. No real-world subject; balanced, calm, mid-century-modern feel.",
 		points: 150,
 		hints: [
-			"Describe the visual flow and energy",
-			"Mention art movement or inspiration",
-			"Use evocative words for abstract concepts",
+			"State that it is abstract, with no real-world subject",
+			"Describe the shapes and how they overlap",
+			"Name the colour palette and the overall mood",
 		],
 		estimatedTime: 8,
-		tags: ["abstract", "art", "creativity"],
+		tags: ["abstract", "colour", "style"],
 		learningObjectives: [
-			"Learn abstract description techniques",
-			"Practice creative prompting",
-			"Understand artistic style references",
+			"Describe non-representational imagery",
+			"Specify a colour palette and style reference",
+			"Practice controlling mood through colour",
 		],
 	},
 
-	// HARD LEVELS (8-10)
+	// HARD LEVELS (8-10): style + lighting + composition + constraints. passingScore 80, 8-10 keywords.
 	{
 		id: "image-8-hard",
 		type: "image" as const,
-		title: "Mechanical Assembly",
-		description:
-			"Create a detailed technical illustration of complex machinery",
+		title: "Technical Blueprint",
+		description: "Produce a precise, monochrome engineering-style illustration.",
 		difficulty: "advanced" as const,
 		passingScore: 80,
 		unlocked: false,
 		order: 8,
-		targetImageUrl:
-			"https://diligent-terrier-105.convex.cloud/api/storage/kg2a7tyyc4fh2nxv76r961d079808qjz",
-		hiddenPromptKeywords: ["gears", "precision", "industrial", "metallic"],
-		style: "Technical illustration",
+		hiddenPromptKeywords: [
+			"blueprint",
+			"technical drawing",
+			"radial engine",
+			"white line art",
+			"dark charcoal background",
+			"symmetrical",
+			"dimension annotations",
+			"spec table",
+			"monochrome",
+			"head-on view",
+		],
+		style: "Blueprint / technical schematic",
+		whatUserSees:
+			"A technical blueprint-style illustration of a radial aircraft engine viewed head-on — pistons and connecting rods arranged symmetrically in a circle around a central hub. Fine white line-art on a dark charcoal background, with faint dimension lines, measurement annotations, and small spec tables in the corners. Precise, monochrome, engineering-drawing aesthetic.",
 		points: 250,
 		hints: [
-			"Describe mechanical components and their interactions",
-			"Include precise measurements and tolerances",
-			"Specify materials, textures, and lighting effects",
+			"Specify the drawing style (blueprint, white line art) and the dark background",
+			"Describe the subject and that it is symmetrical and viewed head-on",
+			"Call out the technical detail — dimension lines, annotations, spec tables",
 		],
 		estimatedTime: 15,
-		tags: ["mechanical", "technical", "precision"],
+		tags: ["technical", "style", "precision"],
 		learningObjectives: [
-			"Master complex technical description",
-			"Learn precision and detail prompting",
-			"Understand industrial visualization techniques",
+			"Control a specific illustration style end to end",
+			"Combine subject, layout, and fine detail",
+			"Practice precise, constraint-driven prompting",
 		],
 	},
 	{
 		id: "image-9-hard",
 		type: "image" as const,
-		title: "Complex Scene",
-		description: "Generate a multi-element scene with action and interaction",
+		title: "Surreal Scene",
+		description: "Compose a moody, multi-element surreal scene with deliberate lighting.",
 		difficulty: "advanced" as const,
 		passingScore: 80,
 		unlocked: false,
 		order: 9,
-		targetImageUrl:
-			"https://diligent-terrier-105.convex.cloud/api/storage/kg29kq8hf09g871vyt63t8kzp1808wac",
-		hiddenPromptKeywords: ["street", "rain", "umbrella", "neon lights"],
-		style: "Cinematic",
+		hiddenPromptKeywords: [
+			"bioluminescent jellyfish",
+			"abandoned subway tunnel",
+			"railway tracks",
+			"wet reflective floor",
+			"blue and purple glow",
+			"fog",
+			"cinematic",
+			"symmetrical composition",
+			"moody atmosphere",
+			"surreal",
+		],
+		style: "Surreal cinematic",
+		whatUserSees:
+			"A surreal, atmospheric scene: dozens of glowing bioluminescent jellyfish drift through an abandoned subway tunnel. Railway tracks recede into the distance along a wet, reflective floor that mirrors the jellyfish glow. Cool blue, teal and purple light, soft fog, derelict graffiti walls, and a centred, symmetrical, cinematic composition. Dreamlike and moody.",
 		points: 250,
 		hints: [
-			"Describe the action and relationship between elements",
-			"Include environmental details and atmosphere",
-			"Mention camera perspective and depth",
+			"Describe the unexpected combination of subjects and the setting",
+			"Specify the light's colour, the glow, and the atmosphere (fog, reflections)",
+			"Mention the composition and camera feel (symmetrical, cinematic, depth)",
 		],
 		estimatedTime: 15,
-		tags: ["scenes", "cinematic", "complex"],
+		tags: ["surreal", "cinematic", "composition"],
 		learningObjectives: [
-			"Learn complex scene composition",
-			"Practice action and interaction prompting",
-			"Master cinematic descriptions",
+			"Compose a scene with multiple interacting elements",
+			"Direct lighting, colour, and mood deliberately",
+			"Master cinematic, atmospheric prompting",
 		],
 	},
 	{
 		id: "image-10-hard",
 		type: "image" as const,
-		title: "Product Visualization",
-		description:
-			"Create a professional product shot with specific branding feel",
+		title: "Product Hero Shot",
+		description: "Direct a dramatic, high-end commercial product image.",
 		difficulty: "advanced" as const,
 		passingScore: 80,
 		unlocked: false,
 		order: 10,
-		targetImageUrl:
-			"https://diligent-terrier-105.convex.cloud/api/storage/kg22xchz6rff36ghgfszh709p1809hmb",
 		hiddenPromptKeywords: [
-			"smartphone",
-			"elegant",
-			"minimal",
-			"studio lighting",
+			"black smartphone",
+			"water splash",
+			"frozen motion",
+			"ring of droplets",
+			"pure black background",
+			"studio rim lighting",
+			"high-speed photography",
+			"glossy reflections",
+			"centred composition",
+			"monochrome",
 		],
-		style: "Luxury product photography",
+		style: "Commercial product photography",
+		whatUserSees:
+			"A dramatic product hero shot of a black smartphone floating upright against a pure black background, encircled by a ring of crystal-clear water droplets and splashes frozen mid-air. Sharp studio rim lighting catches the water and the phone's edges. High-speed photography, monochrome, glossy reflections, perfectly centred composition — premium and minimal.",
 		points: 250,
 		hints: [
-			"Describe the product's materials and finish",
-			"Include premium lighting reflections",
-			"Specify the brand mood and positioning",
+			"Name the product and the dramatic effect around it (frozen water splash)",
+			"Specify the background, the lighting style, and the reflections",
+			"Describe the composition and the premium, high-speed-photography feel",
 		],
 		estimatedTime: 15,
-		tags: ["product", "commercial", "premium"],
+		tags: ["product", "commercial", "lighting"],
 		learningObjectives: [
-			"Master commercial product prompting",
-			"Learn luxury aesthetic descriptions",
-			"Understand branding through imagery",
+			"Direct lighting, motion, and composition together",
+			"Use professional commercial photography language",
+			"Master high-constraint, premium prompting",
 		],
 	},
 ];
@@ -355,6 +423,7 @@ export const imageLevels = imageLevelsBase.map((level) => ({
 
 import { codingLessons } from "./coding_lessons_data";
 import { copywritingLessons } from "./copywriting_lessons_data";
+import { agentLessons } from "./agent_lessons_data";
 import { questLevelsData } from "./quest_levels_data";
 
 /** Map onboarding-style coding lessons to level format for seeding */
@@ -363,16 +432,26 @@ function mapCodingLessonToLevel(
 	index: number,
 ) {
 	const order = 11 + index;
-	const difficulty =
-		index < 5 ? "beginner" : index < 10 ? "intermediate" : "advanced";
+	// Difficulty is derived from the lesson id suffix (-easy / -medium / -hard)
+	// so appended lessons keep the correct tier regardless of array position.
+	const tier = lesson.id.split("-").pop();
+	const difficulty: "beginner" | "intermediate" | "advanced" =
+		tier === "easy"
+			? "beginner"
+			: tier === "medium"
+				? "intermediate"
+				: "advanced";
+	// Tiered passing scores: the bar rises with difficulty (progression, not flat).
+	const passingScore =
+		difficulty === "beginner" ? 60 : difficulty === "intermediate" ? 70 : 78;
 	const checklistItems = lesson.checklistItems;
 	return {
 		id: lesson.id,
 		type: "code" as const,
 		title: lesson.title,
 		description: lesson.instruction,
-		difficulty: difficulty as "beginner" | "intermediate" | "advanced",
-		passingScore: 70,
+		difficulty,
+		passingScore,
 		unlocked: index < 3,
 		order,
 		instruction: lesson.instruction,
@@ -442,10 +521,72 @@ function mapCopyLessonToLevel(
 
 export const copywritingLevels = copywritingLessons.map(mapCopyLessonToLevel);
 
+/**
+ * Map agent lessons to level format for seeding.
+ *
+ * Mirrors mapCodingLessonToLevel: difficulty is derived from the id suffix so the
+ * tier is stable regardless of array position, and passing scores rise with it
+ * (60/70/78). Agents NEVER use a scaffoldTemplate — beginner/intermediate get a
+ * guiding checklist (scaffoldType "checklist"); advanced is pure free text
+ * (scaffoldType "none"). Agent grading is pure llm_judge against the hidden
+ * `whatUserSees` rubric + `grading.criteria`.
+ */
+function mapAgentLessonToLevel(
+	lesson: (typeof agentLessons)[0],
+	index: number,
+) {
+	// Free order block after image (1-10), code (11-40) and copy (21+).
+	const order = 51 + index;
+	const tier = lesson.id.split("-").pop();
+	const difficulty: "beginner" | "intermediate" | "advanced" =
+		tier === "easy"
+			? "beginner"
+			: tier === "medium"
+				? "intermediate"
+				: "advanced";
+	// Tiered passing scores: the bar rises with difficulty (progression, not flat).
+	const passingScore =
+		difficulty === "beginner" ? 60 : difficulty === "intermediate" ? 70 : 78;
+	// Agent never uses "template": checklist for the guided tiers, none for advanced.
+	const scaffoldType: "checklist" | "none" =
+		difficulty === "advanced" ? "none" : "checklist";
+	const checklistItems =
+		scaffoldType === "checklist" ? lesson.checklistItems : undefined;
+	return {
+		id: lesson.id,
+		type: "agent" as const,
+		title: lesson.title,
+		description: lesson.instruction,
+		difficulty,
+		passingScore,
+		unlocked: index < 3,
+		order,
+		instruction: lesson.instruction,
+		agentBrief: lesson.agentBrief,
+		whatUserSees: lesson.whatUserSees,
+		hints: [lesson.hint],
+		grading: lesson.grading,
+		failState: lesson.failState,
+		successState: lesson.successState,
+		lessonTakeaway: lesson.lessonTakeaway,
+		learningObjectives: [lesson.lessonTakeaway],
+		points: 100,
+		estimatedTime: 6,
+		tags: ["agent", "prompting", "automation"],
+		scaffoldType,
+		// No scaffoldTemplate for agents — just the brief and the free-text input.
+		checklistItems,
+		promptChecklist: checklistItems,
+	};
+}
+
+export const agentLevels = agentLessons.map(mapAgentLessonToLevel);
+
 // Export all levels combined (no separate onboarding level - onboarding uses copywriting-1-easy)
 export const allLevels = [
 	...imageLevels,
 	...codeLevels,
 	...copywritingLevels,
+	...agentLevels,
 	...questLevelsData,
 ];

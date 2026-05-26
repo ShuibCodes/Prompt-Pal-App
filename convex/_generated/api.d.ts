@@ -9,6 +9,7 @@
  */
 
 import type * as achievements from "../achievements.js";
+import type * as agent_lessons_data from "../agent_lessons_data.js";
 import type * as ai from "../ai.js";
 import type * as analytics from "../analytics.js";
 import type * as apps from "../apps.js";
@@ -34,6 +35,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   achievements: typeof achievements;
+  agent_lessons_data: typeof agent_lessons_data;
   ai: typeof ai;
   analytics: typeof analytics;
   apps: typeof apps;

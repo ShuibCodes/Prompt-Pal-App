@@ -61,14 +61,20 @@ describe("quest product domain data", () => {
 		});
 	});
 
-	it("hides inactive tracks from the public selector without deleting lesson content", () => {
-		const activeTracks = DEFAULT_LEARNING_TRACKS.filter((track) => track.isActive);
+	it("exposes the active learning tracks (image, coding, copywriting, agent) in sort order", () => {
+		const activeTracks = [...DEFAULT_LEARNING_TRACKS]
+			.filter((track) => track.isActive)
+			.sort((a, b) => a.sortOrder - b.sortOrder);
 
 		expect(activeTracks.map((track) => track.id)).toEqual([
+			"image-generation",
 			"coding",
 			"copywriting",
+			"agent",
 		]);
-		expect(DEFAULT_LEARNING_TRACKS.some((track) => track.id === "image-generation")).toBe(true);
+		// The selector filters by isActive, so it can still hide a track without
+		// deleting its lesson content.
+		expect(activeTracks.every((track) => track.isActive)).toBe(true);
 	});
 
 	it("keeps lifetime XP independent from spendable perk pricing", () => {
