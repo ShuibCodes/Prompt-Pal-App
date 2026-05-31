@@ -1255,6 +1255,18 @@ export default function QuestScreen() {
 		const passed = lastScore != null && lastScore >= (level.passingScore ?? 70);
 		const rewardXp = quest?.xpReward || level.points || 50;
 		const categoryLabel = (level.type || "code").toUpperCase();
+		// Image challenges are intentionally minimal: just the target image and a
+		// "recreate this" instruction — no verbose brief, checklist, or scaffold.
+		const isImage = level.type === "image";
+		// PromptPal's guide character, shown on both the prompt and result phases.
+		const wizardImage = require("../../../../assets/images/simplification.png");
+		const promptCoachLine = isImage
+			? "Describe this image so I can recreate it."
+			: level.type === "agent"
+				? "Tell me exactly how this agent should behave."
+				: level.type === "copywriting"
+					? "Describe the copy you want me to write."
+					: "Describe what you want me to build.";
 		// Result preview label adapts to the challenge type: agents show the prompt
 		// they wrote, copywriting shows the copy, everything else shows the build.
 		const builtLabel =
@@ -1373,13 +1385,23 @@ export default function QuestScreen() {
 
 		const promptBody = (
 			<View>
-				<View className="flex-row items-center justify-between mb-3">
-					<Text
-						className="text-[13px] font-black uppercase tracking-widest"
-						style={{ color: "#8E8E93" }}
-					>
-						Your Prompt
-					</Text>
+				<View className="flex-row items-center mb-3">
+					<Image
+						source={wizardImage}
+						style={{ width: 40, height: 40, marginRight: 10 }}
+						resizeMode="contain"
+					/>
+					<View className="flex-1 mr-2">
+						<Text
+							className="text-[13px] font-black uppercase tracking-widest"
+							style={{ color: "#8E8E93" }}
+						>
+							Your Prompt
+						</Text>
+						<Text className="text-[12px] leading-4" style={{ color: "#9AA0A6" }} numberOfLines={2}>
+							{promptCoachLine}
+						</Text>
+					</View>
 					<TouchableOpacity
 						onPress={handleGetHint}
 						disabled={hintDisabled}
@@ -1411,20 +1433,22 @@ export default function QuestScreen() {
 					prompt={prompt}
 					onChangePrompt={handlePromptChange}
 					promptPlaceholder={
-						level.type === "agent"
-							? "Write the prompt that instructs this agent…"
-							: level.type === "copywriting"
-								? "Describe the copy you want…"
-								: "Describe what you want to build…"
+						isImage
+							? "Describe the image so AI can recreate it…"
+							: level.type === "agent"
+								? "Write the prompt that instructs this agent…"
+								: level.type === "copywriting"
+									? "Describe the copy you want…"
+									: "Describe what you want to build…"
 					}
-					scaffoldType={level.scaffoldType}
-					scaffoldTemplate={level.scaffoldTemplate}
-					beginnerTemplateLocked={beginnerLocked}
+					scaffoldType={isImage ? undefined : level.scaffoldType}
+					scaffoldTemplate={isImage ? undefined : level.scaffoldTemplate}
+					beginnerTemplateLocked={isImage ? false : beginnerLocked}
 					onBeginnerTemplateSlotsFilledChange={handleBeginnerSlotsFilledChange}
 					onBeginnerSlotValuesJoinedChange={handleBeginnerSlotValuesJoined}
 					onBeginnerSlotValuesArrayChange={handleBeginnerSlotValuesArray}
-					checklistItems={checklistItems}
-					matchedChecklistItems={matchedChecklistItems}
+					checklistItems={isImage ? [] : checklistItems}
+					matchedChecklistItems={isImage ? [] : matchedChecklistItems}
 					inputRef={promptInputRef}
 					onPromptFocus={handlePromptFocus}
 					inputAccessoryViewID={Platform.OS === "ios" ? inputAccessoryId : undefined}
@@ -1482,7 +1506,7 @@ export default function QuestScreen() {
 			<View>
 				<View className="items-center mb-5">
 					<Image
-						source={require("../../../../assets/images/simplification.png")}
+						source={wizardImage}
 						style={{ width: 96, height: 96 }}
 						resizeMode="contain"
 					/>
@@ -1657,18 +1681,29 @@ export default function QuestScreen() {
 										LEVEL {levelNum}  •  {categoryLabel}
 									</Text>
 								</View>
-								<Text
-									className="text-[22px] font-black leading-7"
-									style={{ color: "#3C3C3C" }}
-									numberOfLines={2}
-								>
-									{level.title}
-								</Text>
-								{level.description ? (
-									<Text className="text-[14px] mt-1 leading-5" style={{ color: "#777777" }}>
-										{level.description}
+								{isImage ? (
+									<Text
+										className="text-[22px] font-black leading-7"
+										style={{ color: "#3C3C3C" }}
+									>
+										Recreate this image
 									</Text>
-								) : null}
+								) : (
+									<>
+										<Text
+											className="text-[22px] font-black leading-7"
+											style={{ color: "#3C3C3C" }}
+											numberOfLines={2}
+										>
+											{level.title}
+										</Text>
+										{level.description ? (
+											<Text className="text-[14px] mt-1 leading-5" style={{ color: "#777777" }}>
+												{level.description}
+											</Text>
+										) : null}
+									</>
+								)}
 							</View>
 
 							<View className="px-5" style={{ marginTop: 6 }}>
