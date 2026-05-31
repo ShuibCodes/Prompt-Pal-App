@@ -7,6 +7,7 @@ import {
 	TouchableOpacity,
 	ActivityIndicator,
 	Keyboard,
+	KeyboardAvoidingView,
 	Platform,
 	InputAccessoryView,
 	TextInput,
@@ -19,7 +20,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Button, Card, Badge } from "@/components/ui";
 import { processApiLevelsWithLocalAssets } from "@/features/levels/data";
-import { useGameStore, Level, ChallengeType } from "@/features/game/store";
+import { useGameStore, Level, ChallengeType, MAX_LIVES } from "@/features/game/store";
 import { useUserProgressStore } from "@/features/user/store";
 import { useConvexAI } from "@/hooks/useConvexAI";
 import { convexHttpClient } from "@/lib/convex-client";
@@ -40,9 +41,7 @@ import { HtmlPreview } from "@/features/game/components/HtmlPreview";
 import { CopyTargetPreview } from "@/features/game/components/CopyTargetPreview";
 import { AgentBriefPreview } from "@/features/game/components/AgentBriefPreview";
 import { QuestPromptInputCard } from "@/features/game/components/QuestPromptInputCard";
-import { ChallengeBottomSheet } from "@/features/game/components/ChallengeBottomSheet";
 import { ChallengeScoreBar } from "@/features/game/components/ChallengeScoreBar";
-import { AgentResultTakeaway } from "@/features/game/components/AgentResultTakeaway";
 import { TargetExpandModal } from "@/features/game/components/TargetExpandModal";
 import { TargetImageView } from "@/features/game/components/TargetImageView";
 import {
@@ -138,6 +137,29 @@ const getModuleIdFromLevelType = (levelType: string): string => {
 	}
 };
 
+/**
+ * Build the result-screen checklist feedback: each checklist item paired with the
+ * judge's pass/fail for the criterion at the same index. The checklist is authored
+ * to align 1:1 (in order) with grading.criteria, so a length match means we can
+ * zip them honestly. If they don't align, we show nothing rather than guess.
+ */
+function buildResultChecklist(
+	checklistItems: string[],
+	testResults: Array<{ passed?: boolean }> | undefined,
+): { label: string; passed: boolean }[] {
+	if (
+		!checklistItems.length ||
+		!testResults ||
+		testResults.length !== checklistItems.length
+	) {
+		return [];
+	}
+	return checklistItems.map((label, index) => ({
+		label,
+		passed: testResults[index]?.passed === true,
+	}));
+}
+
 /** Format starterContext for display in copy brief (llm_judge lessons) */
 function formatStarterContext(
 	ctx: Record<string, unknown> | undefined,
@@ -208,7 +230,6 @@ export default function QuestScreen() {
 	const [phase, setPhase] = useState<"prompt" | "result">("prompt");
 	// Result sheet keeps the build preview + "how prompts compare" panel tucked
 	// behind a tap so the verdict stays minimal (wizard-led) by default.
-	const [resultDetailsOpen, setResultDetailsOpen] = useState(false);
 	// Current sheet snap: 0 = peek (target fully visible), 1 = mid (~40%), 2 = full.
 	const [snapIndex, setSnapIndex] = useState(1);
 	const [promptQuality, setPromptQuality] = useState<number | null>(null);
@@ -217,6 +238,11 @@ export default function QuestScreen() {
 	const [lastScore, setLastScore] = useState<number | null>(null);
 	const [feedback, setFeedback] = useState<string[]>([]);
 	const [matchedKeywords, setMatchedKeywords] = useState<string[]>([]);
+	// Checklist as result-screen feedback: each item ticked/crossed by the judge's
+	// matching criterion (built only when the checklist aligns 1:1 with criteria).
+	const [resultChecklist, setResultChecklist] = useState<
+		{ label: string; passed: boolean }[]
+	>([]);
 	const [attemptHistory, setAttemptHistory] = useState<UserLevelAttempt[]>([]);
 	const [level, setLevel] = useState<Level | null>({
 		id: "mock_level_1",
@@ -282,7 +308,20 @@ export default function QuestScreen() {
 	const [moduleLevels, setModuleLevels] = useState<Level[]>([]);
 	const inputAccessoryId = "promptInputAccessory";
 
-	const { loseLife, startLevel, completeLevel, syncToBackend, lives: livesAvailable } = useGameStore();
+	const {
+		loseLife,
+		regenerateLives,
+		startLevel,
+		completeLevel,
+		syncToBackend,
+		lives: livesAvailable,
+	} = useGameStore();
+
+	// Top up hearts based on elapsed time whenever the challenge screen opens, so
+	// a player who ran out earlier comes back to regenerated hearts.
+	useEffect(() => {
+		regenerateLives();
+	}, [regenerateLives]);
 	const {
 		updateStreak,
 		addXP,
@@ -610,6 +649,7 @@ export default function QuestScreen() {
 		}
 
 		setIsGenerating(true);
+		setResultChecklist([]);
 		try {
 			if (level.type === "image") {
 				const generateResult = await generateImage(prompt);
@@ -742,6 +782,9 @@ export default function QuestScreen() {
 				setLastScore(finalScore);
 				setFeedback(evaluation.feedback || []);
 				setPromptQuality((evaluation as any).promptQualityScore ?? null);
+				setResultChecklist(
+					buildResultChecklist(checklistItems, evaluation.testResults),
+				);
 				const testResults = normalizeCodeTestResults(evaluation.testResults);
 				setCodeExecutionResult({
 					code: "",
@@ -1003,87 +1046,91 @@ export default function QuestScreen() {
 				setLastScore(finalScore);
 				setFeedback(evaluation.feedback || []);
 				setPromptQuality((evaluation as any).promptQualityScore ?? null);
+				setResultChecklist(
+					buildResultChecklist(checklistItems, evaluation.testResults),
+				);
+				// Show the result the instant the judge returns. Persisting the
+				// attempt, progress, streak and XP all run in the background so the
+				// player never waits on bookkeeping round-trips.
+				setPhase("result");
+				setSnapIndex(2);
+				Keyboard.dismiss();
 
-				try {
-					if (user?.id) {
-						await convexHttpClient.mutation(
-							api.mutations.saveUserLevelAttempt,
-							{
-								levelId: level.id,
-								score: finalScore,
-								feedback: evaluation.feedback || [],
-								keywordsMatched: [],
-							},
-						);
-
-						const attempts = await convexHttpClient.query(
-							api.queries.getUserLevelAttempts,
-							{
-								levelId: level.id,
-							},
-						);
-						setAttemptHistory(attempts || []);
-					}
-				} catch (saveError) {
-					logger.warn("GameScreen", "Failed to save attempt", {
-						error: saveError,
-					});
-				}
-
-				if (userPassed) {
-					let shouldAwardXp = true;
-					if (user?.id && quest) {
-						if ((quest as any).isQuestRun) {
-							await convexHttpClient.mutation(api.questProduct.submitQuestAttempt, {
-								runId: quest.id as Id<"questRuns">,
-								submissionPayload: {
-									prompt,
-									score: finalScore,
-								},
-							});
-							const rewardResult = await convexHttpClient.mutation(
-								api.questProduct.claimQuestRewards,
-								{ runId: quest.id as Id<"questRuns"> },
-							);
-							if (rewardResult?.alreadyClaimed) shouldAwardXp = false;
-						} else {
-							const result = await convexHttpClient.mutation(
-								api.mutations.completeDailyQuest,
+				void (async () => {
+					try {
+						if (user?.id) {
+							await convexHttpClient.mutation(
+								api.mutations.saveUserLevelAttempt,
 								{
-									questId: quest.id,
+									levelId: level.id,
 									score: finalScore,
+									feedback: (evaluation.feedback || []).map((f) =>
+										f.slice(0, 200),
+									),
+									keywordsMatched: [],
+									// Agents generate no artifact; the prompt itself is the
+									// submission (the mutation requires imageUrl/code/copy).
+									code: prompt,
 								},
 							);
-							if (result?.alreadyCompleted) shouldAwardXp = false;
+							const attempts = await convexHttpClient.query(
+								api.queries.getUserLevelAttempts,
+								{ levelId: level.id },
+							);
+							setAttemptHistory(attempts || []);
 						}
-					}
-					if (user?.id) {
-						const nextAttemptsCount = (attemptHistory?.length ?? 0) + 1;
-						await convexHttpClient.mutation(api.mutations.updateLevelProgress, {
-							appId: "prompt-pal",
-							levelId: level.id,
-							isCompleted: true,
-							bestScore: finalScore,
-							attempts: nextAttemptsCount,
-							completedAt: Date.now(),
+
+						if (userPassed) {
+							let shouldAwardXp = true;
+							if (user?.id && quest) {
+								if ((quest as any).isQuestRun) {
+									await convexHttpClient.mutation(
+										api.questProduct.submitQuestAttempt,
+										{
+											runId: quest.id as Id<"questRuns">,
+											submissionPayload: { prompt, score: finalScore },
+										},
+									);
+									const rewardResult = await convexHttpClient.mutation(
+										api.questProduct.claimQuestRewards,
+										{ runId: quest.id as Id<"questRuns"> },
+									);
+									if (rewardResult?.alreadyClaimed) shouldAwardXp = false;
+								} else {
+									const result = await convexHttpClient.mutation(
+										api.mutations.completeDailyQuest,
+										{ questId: quest.id, score: finalScore },
+									);
+									if (result?.alreadyCompleted) shouldAwardXp = false;
+								}
+							}
+							if (user?.id) {
+								const nextAttemptsCount = (attemptHistory?.length ?? 0) + 1;
+								await convexHttpClient.mutation(
+									api.mutations.updateLevelProgress,
+									{
+										appId: "prompt-pal",
+										levelId: level.id,
+										isCompleted: true,
+										bestScore: finalScore,
+										attempts: nextAttemptsCount,
+										completedAt: Date.now(),
+									},
+								);
+							}
+							await updateStreak();
+							await completeLevel(level.id);
+							syncToBackend().catch(() => {});
+							if (shouldAwardXp) await addXP(quest?.xpReward || 50);
+							setQuest((q: any) => (q ? { ...q, completed: true } : q));
+							if (quest) setCurrentQuest({ ...quest, completed: true });
+						}
+					} catch (bookkeepingError) {
+						logger.warn("GameScreen", "Background save/progress failed", {
+							error: bookkeepingError,
 						});
 					}
-					await updateStreak();
-					await completeLevel(level.id);
-					syncToBackend().catch(() => {});
-					if (shouldAwardXp) await addXP(quest?.xpReward || 50);
-					setQuest((q: any) => (q ? { ...q, completed: true } : q));
-					if (quest) setCurrentQuest({ ...quest, completed: true });
-					setPhase("result");
-					setSnapIndex(2);
-					Keyboard.dismiss();
-				} else {
-					// A life is charged when the player chooses "Try again", not on the
-					// failed attempt itself, so show the result either way.
-					setPhase("result");
-					setSnapIndex(2);
-					Keyboard.dismiss();
-				}
+				})();
 			}
 		} catch (error: any) {
 			const aiError = getAIErrorPresentation(error);
@@ -1103,75 +1150,17 @@ export default function QuestScreen() {
 		}
 	};
 
-	// Preview of what the player's prompt produced (shown in the result phase).
-	const renderBuiltPreview = () => {
-		if (!level) return null;
-		if (level.type === "image") {
-			return generatedImage ? (
-				<Image
-					source={{ uri: generatedImage }}
-					style={{ width: "100%", height: 200, borderRadius: 16 }}
-					resizeMode="cover"
-				/>
-			) : null;
-		}
-		if (level.type === "code") {
-			return generatedCode ? (
-				<View
-					style={{ borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "#EFEFEF" }}
-				>
-					<HtmlPreview
-						html={generatedCode}
-						height={200}
-						autoHeight
-						minHeight={120}
-						maxHeight={440}
-						animateIn={false}
-						interactive={false}
-					/>
-				</View>
-			) : null;
-		}
-		if (level.type === "copywriting") {
-			return generatedCopy ? (
-				<ScrollView
-					style={{ maxHeight: 220 }}
-					showsVerticalScrollIndicator={false}
-					nestedScrollEnabled
-				>
-					<Text className="text-[15px] leading-6" style={{ color: "#3C3C3C" }}>
-						{generatedCopy}
-					</Text>
-				</ScrollView>
-			) : null;
-		}
-		if (level.type === "agent") {
-			// Agents have no generated artifact — the "result" is the prompt the
-			// player wrote to instruct the agent, shown back for reflection. The
-			// section label above already reads "Your prompt", so no inner label here.
-			return prompt.trim() ? (
-				<ScrollView
-					style={{ maxHeight: 220 }}
-					showsVerticalScrollIndicator={false}
-					nestedScrollEnabled
-				>
-					<Text className="text-[15px] leading-6" style={{ color: "#3C3C3C" }}>
-						{prompt}
-					</Text>
-				</ScrollView>
-			) : null;
-		}
-		return null;
-	};
-
 	// "Try again" — available on both pass and fail. Spends a heart, resets the
 	// attempt (keeping the player's prompt so they can refine it), and returns the
 	// sheet to its prompt phase.
 	const handleTryAgain = async () => {
-		if (livesAvailable <= 0) {
+		// Regenerate first, then read the fresh count (the destructured value is a
+		// stale snapshot within this handler).
+		useGameStore.getState().regenerateLives();
+		if (useGameStore.getState().lives <= 0) {
 			Alert.alert(
 				"Out of hearts",
-				"You're out of hearts for now. Head back to the path and come back soon.",
+				"You're out of hearts for now. They refill over time — head back to the path and come back soon.",
 			);
 			return;
 		}
@@ -1187,7 +1176,7 @@ export default function QuestScreen() {
 		setMatchedKeywords([]);
 		setActiveTab("target");
 		setQuest((q: any) => (q ? { ...q, completed: false } : q));
-		setResultDetailsOpen(false);
+		setResultChecklist([]);
 		setPhase("prompt");
 		setSnapIndex(1);
 	};
@@ -1201,30 +1190,11 @@ export default function QuestScreen() {
 	const renderChallenge = () => {
 		if (!level) return null;
 
-		// Sheet snap points (fractions of screen height): a low peek that all but hides
-		// the sheet (handle only — footer hidden) so the back is fully visible, a
-		// comfortable mid height, and near-full. The back scrolls under the peeked sheet.
-		const sheetSnapPoints = [0.1, 0.4, 0.94];
-		// Pad the back's scroll by the *current* sheet height so the target can always
-		// be scrolled fully clear of the sheet and stays put (no rubber-band snap-back).
-		const backScrollPadBottom =
-			Math.round(
-				viewportHeight *
-					sheetSnapPoints[Math.min(snapIndex, sheetSnapPoints.length - 1)],
-			) + 32;
 		const passed = lastScore != null && lastScore >= (level.passingScore ?? 70);
 		const rewardXp = quest?.xpReward || level.points || 50;
 		const categoryLabel = (level.type || "code").toUpperCase();
-		// Result preview label adapts to the challenge type: agents show the prompt
-		// they wrote, copywriting shows the copy, everything else shows the build.
-		const builtLabel =
-			level.type === "agent"
-				? "Your prompt"
-				: level.type === "copywriting"
-					? "What you wrote"
-					: "What you built";
 		const levelNum = level.order || 1;
-		const totalHearts = 3;
+		const totalHearts = MAX_LIVES;
 
 		const hintLabel = noHintsLeft
 			? "No hints left"
@@ -1417,22 +1387,13 @@ export default function QuestScreen() {
 		);
 
 		const verdictTitle = passed ? "Nailed it!" : "Almost there!";
-		const builtPreview = renderBuiltPreview();
-		const hasAgentTakeaway = level.type === "agent";
-		// The collapsible "details" toggle only exists for things that genuinely
-		// belong behind a tap (a build preview or the agent takeaway). Coding has
-		// neither anymore, so it shows no toggle — extra feedback renders inline.
-		const hasResultDetails = Boolean(builtPreview) || hasAgentTakeaway;
-		const resultDetailsLabel = hasAgentTakeaway
-			? "See the takeaway"
-			: "See what you built";
 
 		const resultBody = (
 			<View>
 				<View className="items-center mb-5">
 					<ExpoImage
 						source={require("../../../../assets/OBJECTS.svg")}
-						style={{ width: 200, height: 240 }}
+						style={{ width: 260, height: 310 }}
 						contentFit="contain"
 					/>
 					<Text className="text-[26px] font-black mt-2" style={{ color: "#3C3C3C" }}>
@@ -1468,34 +1429,34 @@ export default function QuestScreen() {
 					delay={120}
 				/>
 
-				{/* Under the score bars: XP gained and current streak — nothing else. */}
+				{/* Under the score bars: XP gained and current streak — the reward beat. */}
 				<View className="flex-row mt-5" style={{ gap: 12 }}>
 					<View
-						className="flex-1 items-center rounded-2xl py-4"
+						className="flex-1 items-center rounded-2xl py-6"
 						style={{ backgroundColor: "#FFF4E5" }}
 					>
-						<Text className="text-[24px] font-black" style={{ color: "#FF9600" }}>
+						<Text className="text-[34px] font-black" style={{ color: "#FF9600" }}>
 							+{passed ? rewardXp : 0}
 						</Text>
 						<Text
-							className="text-[11px] font-black uppercase tracking-widest mt-0.5"
+							className="text-[12px] font-black uppercase tracking-widest mt-1"
 							style={{ color: "#FF9600" }}
 						>
 							XP gained
 						</Text>
 					</View>
 					<View
-						className="flex-1 items-center rounded-2xl py-4"
+						className="flex-1 items-center rounded-2xl py-6"
 						style={{ backgroundColor: "#FFF1F0" }}
 					>
 						<View className="flex-row items-center">
-							<Ionicons name="flame" size={20} color="#FF4B4B" style={{ marginRight: 4 }} />
-							<Text className="text-[24px] font-black" style={{ color: "#FF4B4B" }}>
+							<Ionicons name="flame" size={28} color="#FF4B4B" style={{ marginRight: 6 }} />
+							<Text className="text-[34px] font-black" style={{ color: "#FF4B4B" }}>
 								{currentStreak}
 							</Text>
 						</View>
 						<Text
-							className="text-[11px] font-black uppercase tracking-widest mt-0.5"
+							className="text-[12px] font-black uppercase tracking-widest mt-1"
 							style={{ color: "#FF4B4B" }}
 						>
 							Day streak
@@ -1503,54 +1464,46 @@ export default function QuestScreen() {
 					</View>
 				</View>
 
-				{/* Build preview (image/copy) or agent takeaway stays one tap away to
-				    keep the result minimal. Coding shows no toggle. */}
-				{hasResultDetails ? (
-					<View className="mt-4">
-						<TouchableOpacity
-							onPress={() => setResultDetailsOpen((open) => !open)}
-							activeOpacity={0.8}
-							accessibilityRole="button"
-							className="flex-row items-center justify-center py-2"
+				{/* Checklist as feedback: what the prompt covered (✓) and missed (✗). */}
+				{resultChecklist.length > 0 ? (
+					<View
+						className="mt-4 rounded-2xl p-4"
+						style={{ backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#EFEFEF" }}
+					>
+						<Text
+							className="text-[10px] font-black uppercase tracking-[2px] mb-3"
+							style={{ color: "#8E8E93" }}
 						>
-							<Ionicons
-								name={resultDetailsOpen ? "chevron-down" : "chevron-forward"}
-								size={16}
-								color="#58CC02"
-								style={{ marginRight: 6 }}
-							/>
-							<Text
-								className="text-[13px] font-black uppercase tracking-widest"
-								style={{ color: "#58CC02" }}
-							>
-								{resultDetailsOpen ? "Hide details" : resultDetailsLabel}
-							</Text>
-						</TouchableOpacity>
-
-						{resultDetailsOpen ? (
-							<View className="mt-3">
-								{builtPreview ? (
-									<>
-										<Text
-											className="text-[12px] font-black uppercase tracking-widest mb-2"
-											style={{ color: "#8E8E93" }}
-										>
-											{builtLabel}
-										</Text>
-										<View
-											className="rounded-2xl p-3 mb-5"
-											style={{ backgroundColor: "#F7F7F7", borderWidth: 1, borderColor: "#EFEFEF" }}
-										>
-											{builtPreview}
-										</View>
-									</>
-								) : null}
-
-								{hasAgentTakeaway ? (
-									<AgentResultTakeaway takeaway={level.lessonTakeaway} passed={passed} />
-								) : null}
+							What you covered
+						</Text>
+						{resultChecklist.map((item, index) => (
+							<View key={index} className="flex-row items-center mb-2 last:mb-0">
+								<Ionicons
+									name={item.passed ? "checkmark-circle" : "close-circle"}
+									size={20}
+									color={item.passed ? "#58CC02" : "#E53935"}
+									style={{ marginRight: 8 }}
+								/>
+								<Text
+									className="flex-1 text-[14px] leading-5"
+									style={{ color: item.passed ? "#3C3C3C" : "#999999" }}
+								>
+									{item.label}
+								</Text>
 							</View>
-						) : null}
+						))}
+					</View>
+				) : null}
+
+				{/* One inline takeaway line — the single most useful lesson, never gated. */}
+				{level.lessonTakeaway ? (
+					<View
+						className="mt-4 rounded-2xl p-4"
+						style={{ backgroundColor: "#F7F7F7", borderWidth: 1, borderColor: "#EFEFEF" }}
+					>
+						<Text className="text-[14px] leading-6" style={{ color: "#3C3C3C" }}>
+							{level.lessonTakeaway}
+						</Text>
 					</View>
 				) : null}
 			</View>
@@ -1559,7 +1512,11 @@ export default function QuestScreen() {
 		return (
 			<View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
 				<SafeAreaView edges={["top"]} style={{ flex: 1 }}>
-					<View style={{ flex: 1 }}>
+					<KeyboardAvoidingView
+						style={{ flex: 1 }}
+						behavior={Platform.OS === "ios" ? "padding" : undefined}
+					>
+						{/* Top nav: close, progress, hearts */}
 						<View className="px-5 pt-1 pb-3 flex-row items-center">
 							<TouchableOpacity
 								onPress={goBackOrHome}
@@ -1595,86 +1552,107 @@ export default function QuestScreen() {
 							</View>
 						</View>
 
+						{/* Single scrollable page: brief + prompt section stacked together
+						    (no draggable sheet). Result uses the same full page. */}
 						<ScrollView
 							style={{ flex: 1 }}
-							contentContainerStyle={{ paddingBottom: backScrollPadBottom }}
+							contentContainerStyle={{ paddingBottom: 24 }}
 							showsVerticalScrollIndicator={false}
+							keyboardShouldPersistTaps="handled"
 							removeClippedSubviews={false}
 						>
-							<View className="px-6 mb-2">
-								<View
-									className="self-start px-3 py-1.5 rounded-full mb-2"
-									style={{ backgroundColor: "#E8F7DD" }}
-								>
-									<Text className="text-[11px] font-black tracking-widest" style={{ color: "#58CC02" }}>
-										LEVEL {levelNum}  •  {categoryLabel}
-									</Text>
-								</View>
-								<Text
-									className="text-[22px] font-black leading-7"
-									style={{ color: "#3C3C3C" }}
-									numberOfLines={2}
-								>
-									{level.title}
-								</Text>
-								{level.description ? (
-									<Text className="text-[14px] mt-1 leading-5" style={{ color: "#777777" }}>
-										{level.description}
-									</Text>
-								) : null}
-							</View>
+							{phase === "result" ? (
+								<View className="px-5 pt-2">{resultBody}</View>
+							) : (
+								<>
+									<View className="px-6 mb-2">
+										<View
+											className="self-start px-3 py-1.5 rounded-full mb-2"
+											style={{ backgroundColor: "#E8F7DD" }}
+										>
+											<Text className="text-[11px] font-black tracking-widest" style={{ color: "#58CC02" }}>
+												LEVEL {levelNum}  •  {categoryLabel}
+											</Text>
+										</View>
+										<Text
+											className="text-[22px] font-black leading-7"
+											style={{ color: "#3C3C3C" }}
+											numberOfLines={2}
+										>
+											{level.title}
+										</Text>
+									</View>
 
-							<View className="px-5" style={{ marginTop: 6 }}>
-								<View
-									style={{
-										height: targetPreviewHeight,
-										borderRadius: 24,
-										overflow: "hidden",
-										backgroundColor: "#F7F7F7",
-										borderWidth: 1,
-										borderColor: "#EFEFEF",
-									}}
-								>
-									<View style={{ flex: 1 }}>{renderLessonTarget(false)}</View>
-								</View>
-								<TouchableOpacity
-									onPress={() => setTargetExpanded(true)}
-									activeOpacity={0.85}
-									accessibilityRole="button"
-									accessibilityLabel="Expand target"
-									className="absolute items-center justify-center"
-									style={{
-										right: 24,
-										bottom: 14,
-										width: 40,
-										height: 40,
-										borderRadius: 20,
-										backgroundColor: "#FFFFFF",
-										borderWidth: 1,
-										borderColor: "#EFEFEF",
-										shadowColor: "#000000",
-										shadowOffset: { width: 0, height: 2 },
-										shadowOpacity: 0.12,
-										shadowRadius: 6,
-										elevation: 4,
-									}}
-								>
-									<Ionicons name="expand" size={18} color="#3C3C3C" />
-								</TouchableOpacity>
-							</View>
+									{/* One context, said once. Agent shows a compact text brief.
+									    Visual types (image, coding) show the rendered target in a
+									    fixed box you can expand. */}
+									<View className="px-5" style={{ marginTop: 6 }}>
+										{level.type === "agent" ? (
+											<View>{renderLessonTarget(false)}</View>
+										) : (
+											<>
+												<View
+													style={{
+														height: targetPreviewHeight,
+														borderRadius: 24,
+														overflow: "hidden",
+														backgroundColor: "#F7F7F7",
+														borderWidth: 1,
+														borderColor: "#EFEFEF",
+													}}
+												>
+													<View style={{ flex: 1 }}>{renderLessonTarget(false)}</View>
+												</View>
+												<TouchableOpacity
+													onPress={() => setTargetExpanded(true)}
+													activeOpacity={0.85}
+													accessibilityRole="button"
+													accessibilityLabel="Expand target"
+													className="absolute items-center justify-center"
+													style={{
+														right: 24,
+														bottom: 14,
+														width: 40,
+														height: 40,
+														borderRadius: 20,
+														backgroundColor: "#FFFFFF",
+														borderWidth: 1,
+														borderColor: "#EFEFEF",
+														shadowColor: "#000000",
+														shadowOffset: { width: 0, height: 2 },
+														shadowOpacity: 0.12,
+														shadowRadius: 6,
+														elevation: 4,
+													}}
+												>
+													<Ionicons name="expand" size={18} color="#3C3C3C" />
+												</TouchableOpacity>
+											</>
+										)}
+									</View>
+
+									{/* Prompt section directly below the brief — all on one page. */}
+									<View className="px-5" style={{ marginTop: 18 }}>
+										{promptBody}
+									</View>
+								</>
+							)}
 						</ScrollView>
-					</View>
-				</SafeAreaView>
 
-				<ChallengeBottomSheet
-					snapPoints={sheetSnapPoints}
-					snapIndex={snapIndex}
-					onSnapIndexChange={setSnapIndex}
-					hideFooterBelowIndex={1}
-					footer={phase === "result" ? resultFooter : promptFooter}
-				>
-					{phase === "result" ? resultBody : promptBody}
-				</ChallengeBottomSheet>
+						{/* Pinned action footer — submit / result actions, always visible. */}
+						<View
+							className="px-5 pt-3"
+							style={{
+								borderTopWidth: 1,
+								borderTopColor: "#F0F0F0",
+								paddingBottom: 12,
+								backgroundColor: "#FFFFFF",
+							}}
+						>
+							{phase === "result" ? resultFooter : promptFooter}
+						</View>
+					</KeyboardAvoidingView>
+				</SafeAreaView>
 
 				<TargetExpandModal
 					visible={targetExpanded}
@@ -1746,15 +1724,10 @@ export default function QuestScreen() {
 		}
 
 		if (level.type === "agent") {
-			// Agent: the ONLY visible context is the plain-text brief. No image, no
-			// template, no criteria (the rubric is hidden).
-			return (
-				<AgentBriefPreview
-					agentBrief={level.agentBrief ?? ""}
-					instruction={level.instruction}
-					height={targetPreviewHeight}
-				/>
-			);
+			// Agent: the ONLY visible context is one short brief (+ optional muted
+			// "produces" line, plumbed via briefGoal). No image, no template, no
+			// criteria (the rubric is hidden), nothing that repeats the task.
+			return <AgentBriefPreview agentBrief={level.agentBrief ?? ""} />;
 		}
 
 		if (

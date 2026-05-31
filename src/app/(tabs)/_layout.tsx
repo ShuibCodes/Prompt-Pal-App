@@ -98,19 +98,6 @@ function NativeTabShell() {
 					}}
 				/>
 				<Tabs.Screen
-					name="cart"
-					options={{
-						tabBarLabel: "Store",
-						tabBarIcon: ({ color, focused, size }) => (
-							<Ionicons
-								name={focused ? "bag" : "bag-outline"}
-								size={size ?? 24}
-								color={color}
-							/>
-						),
-					}}
-				/>
-				<Tabs.Screen
 					name="profile"
 					options={{
 						tabBarLabel: "Profile",

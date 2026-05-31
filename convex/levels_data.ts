@@ -442,9 +442,22 @@ function mapCodingLessonToLevel(
 				? "intermediate"
 				: "advanced";
 	// Tiered passing scores: the bar rises with difficulty (progression, not flat).
+	// Tier-scaled bar: easy is generous (momentum-first — a genuine attempt passes),
+	// the bar rises with difficulty. Pairs with the holistic judge + the
+	// all-required gate that only applies on the advanced tier.
 	const passingScore =
-		difficulty === "beginner" ? 60 : difficulty === "intermediate" ? 70 : 78;
-	const checklistItems = lesson.checklistItems;
+		difficulty === "beginner" ? 35 : difficulty === "intermediate" ? 55 : 70;
+	// Coding scaffold fade: easy = fill-in-the-blank template; medium/hard/boss =
+	// empty box (no checklist tier). The visual target carries the brief.
+	const scaffoldType: "template" | "none" =
+		difficulty === "beginner" ? "template" : "none";
+	const scaffoldTemplate =
+		scaffoldType === "template" ? lesson.scaffoldTemplate : undefined;
+	const checklistItems =
+		scaffoldType === "template" ? lesson.checklistItems : undefined;
+	// The final hard challenge is the coding-track capstone — give it the boss
+	// moment (boss node icon on the path).
+	const lessonMode = lesson.id === "code-5-hard" ? ("boss" as const) : undefined;
 	return {
 		id: lesson.id,
 		type: "code" as const,
@@ -457,7 +470,6 @@ function mapCodingLessonToLevel(
 		instruction: lesson.instruction,
 		whatUserSees: lesson.whatUserSees,
 		hints: [lesson.hint],
-		starterCode: lesson.starterCode,
 		grading: lesson.grading,
 		failState: lesson.failState,
 		successState: lesson.successState,
@@ -467,13 +479,11 @@ function mapCodingLessonToLevel(
 		estimatedTime: 6,
 		tags: ["prompting", "web", "ui"],
 		language: "html",
-		scaffoldType: getScaffoldTypeForDifficulty(difficulty),
-		scaffoldTemplate:
-			getScaffoldTypeForDifficulty(difficulty) === "template"
-				? lesson.scaffoldTemplate
-				: undefined,
+		scaffoldType,
+		scaffoldTemplate,
 		checklistItems,
 		promptChecklist: checklistItems,
+		lessonMode,
 	};
 }
 
@@ -545,13 +555,24 @@ function mapAgentLessonToLevel(
 				? "intermediate"
 				: "advanced";
 	// Tiered passing scores: the bar rises with difficulty (progression, not flat).
+	// Tier-scaled bar: easy is generous (momentum-first — a genuine attempt passes),
+	// the bar rises with difficulty. Pairs with the holistic judge + the
+	// all-required gate that only applies on the advanced tier.
 	const passingScore =
-		difficulty === "beginner" ? 60 : difficulty === "intermediate" ? 70 : 78;
-	// Agent never uses "template": checklist for the guided tiers, none for advanced.
-	const scaffoldType: "checklist" | "none" =
-		difficulty === "advanced" ? "none" : "checklist";
-	const checklistItems =
-		scaffoldType === "checklist" ? lesson.checklistItems : undefined;
+		difficulty === "beginner" ? 35 : difficulty === "intermediate" ? 55 : 70;
+	// Scaffolding fade: easy + medium use a template (easy locks it into
+	// fill-in-the-blank slots; medium shows it as a guidance card above a free
+	// box), advanced is an empty box (pure free text).
+	const scaffoldType: "template" | "none" =
+		difficulty === "advanced" ? "none" : "template";
+	const scaffoldTemplate =
+		scaffoldType === "template" ? lesson.scaffoldTemplate : undefined;
+	// Only easy carries checklistItems (its template slot labels + heuristic);
+	// medium intentionally shows just the starter template, no checklist.
+	const checklistItems = lesson.checklistItems;
+	// The final hard challenge is the agent-track capstone — give it the boss
+	// moment (boss node icon on the path).
+	const lessonMode = lesson.id === "agent-6-hard" ? ("boss" as const) : undefined;
 	return {
 		id: lesson.id,
 		type: "agent" as const,
@@ -574,19 +595,18 @@ function mapAgentLessonToLevel(
 		estimatedTime: 6,
 		tags: ["agent", "prompting", "automation"],
 		scaffoldType,
-		// No scaffoldTemplate for agents — just the brief and the free-text input.
+		scaffoldTemplate,
 		checklistItems,
 		promptChecklist: checklistItems,
+		lessonMode,
 	};
 }
 
 export const agentLevels = agentLessons.map(mapAgentLessonToLevel);
 
-// Export all levels combined (no separate onboarding level - onboarding uses copywriting-1-easy)
-export const allLevels = [
-	...imageLevels,
-	...codeLevels,
-	...copywritingLevels,
-	...agentLevels,
-	...questLevelsData,
-];
+// Staged rollout: only the agent batch is live right now. The seeder removes any
+// level not in this list, so coding/image/copywriting/daily levels are
+// intentionally dark until we rebuild those batches. Their data + mappings stay
+// in this file (imageLevels, codeLevels, copywritingLevels, questLevelsData) so
+// re-enabling a batch is just adding it back to this array.
+export const allLevels = [...agentLevels];

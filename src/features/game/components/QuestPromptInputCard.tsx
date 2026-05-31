@@ -38,7 +38,19 @@ export function QuestPromptInputCard({
 	inputAccessoryViewID,
 }: QuestPromptInputCardProps) {
 	return (
-		<View className="bg-surfaceVariant/5 border border-outline/20 rounded-[24px] p-6 min-h-[160px]">
+		<View
+			className="rounded-[24px] p-6 min-h-[180px]"
+			style={{
+				backgroundColor: "#F4FBEE",
+				borderWidth: 2,
+				borderColor: "#BFE6A3",
+				shadowColor: "#58CC02",
+				shadowOffset: { width: 0, height: 4 },
+				shadowOpacity: 0.12,
+				shadowRadius: 12,
+				elevation: 3,
+			}}
+		>
 			<PromptScaffoldHelper
 				scaffoldType={scaffoldType}
 				scaffoldTemplate={scaffoldTemplate}

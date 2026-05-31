@@ -48,6 +48,9 @@ export type LegacyLevel = {
 	learningObjectives?: string[];
 	prerequisites?: string[];
 	unlocked?: boolean;
+	// Optional override for the node's mode (e.g. force a track capstone to "boss"
+	// regardless of its path position).
+	lessonMode?: LessonMode;
 };
 
 export type LearningTrackSeed = {
@@ -165,7 +168,8 @@ export const DEFAULT_LEARNING_TRACKS: LearningTrackSeed[] = [
 		iconKey: "image",
 		themeKey: "amber",
 		sortOrder: 1,
-		isActive: true,
+		// Staged rollout: agent batch ships first. Hidden until its batch is rebuilt.
+		isActive: false,
 	},
 	{
 		id: "coding",
@@ -175,7 +179,8 @@ export const DEFAULT_LEARNING_TRACKS: LearningTrackSeed[] = [
 		iconKey: "code",
 		themeKey: "green",
 		sortOrder: 2,
-		isActive: true,
+		// Staged rollout: agent batch ships first. Hidden until its batch is rebuilt.
+		isActive: false,
 	},
 	{
 		id: "copywriting",
@@ -328,6 +333,10 @@ export function getTrackIdForLessonType(type: LessonType): TrackId {
 }
 
 function getLessonMode(level: LegacyLevel, nodeOrder: number): LessonMode {
+	// Explicit override wins (e.g. a track capstone forced to "boss").
+	if (level.lessonMode) {
+		return level.lessonMode;
+	}
 	if (level.id.startsWith("quest_")) {
 		return "daily";
 	}

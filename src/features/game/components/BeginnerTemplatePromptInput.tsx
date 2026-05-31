@@ -88,8 +88,10 @@ export function BeginnerTemplatePromptInput({
 		[onChangePrompt, segments],
 	);
 
+	// Gaps look like tappable fields: a faint green pill with a solid accent
+	// underline, so it's obvious these are the things you fill in.
 	const inputClass =
-		"text-lg text-primary font-semibold min-w-[72px] max-w-[220px] border-b-2 border-primary/35 bg-transparent py-0.5 px-1 mx-0.5 mb-1";
+		"text-lg text-primary font-semibold min-w-[72px] max-w-[220px] border-b-2 border-primary bg-primary/10 rounded-lg py-0.5 px-2 mx-0.5 mb-1";
 	const staticTextClass = "text-lg text-onSurface leading-7 mb-1";
 
 	return (

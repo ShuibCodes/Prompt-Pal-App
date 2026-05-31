@@ -512,6 +512,7 @@ export const evaluateCodeSubmission = action({
 						whatUserSees: level.whatUserSees,
 						instruction: level.description,
 						criteria: grading.criteria,
+						difficulty: level.difficulty,
 					})
 				: buildCodeLlmJudgePrompt({
 						userPrompt: args.userPrompt,
@@ -528,7 +529,7 @@ export const evaluateCodeSubmission = action({
 				context:
 					"You are a strict frontend code reviewer. Evaluate only against the criteria and respond only with valid JSON.",
 			});
-			const { passed, reasons } = parseLlmJudgeResponse(
+			const { passed, reasons, overallScore } = parseLlmJudgeResponse(
 				generated.text,
 				grading.criteria,
 			);
@@ -538,14 +539,15 @@ export const evaluateCodeSubmission = action({
 					grading.criteria,
 					grading.passingCondition ?? "All required criteria pass",
 				);
-			let score = Math.round(
-				criteriaScore * 0.8 + promptAssessment.score * 0.2,
-			);
-			// Enforce the rubric's passing condition: if a REQUIRED criterion fails
-			// (e.g. the prompt never actually specifies a heading), the attempt must
-			// not pass — regardless of the weighted score or prompt-quality floor.
-			// Without this, gibberish in a beginner template still cleared the bar.
-			if (!conditionMet) {
+			// Holistic quality is the primary score (criteria power the ✓/✗ feedback);
+			// fall back to criteria coverage if the judge omitted overallScore.
+			const quality =
+				typeof overallScore === "number" ? overallScore : criteriaScore;
+			let score = Math.round(quality * 0.8 + promptAssessment.score * 0.2);
+			// Only the strict tier (advanced/boss) hard-requires every required
+			// criterion. Easy & medium reward sensible partial attempts so beginners
+			// keep moving; gibberish still fails on its low holistic score.
+			if (level.difficulty === "advanced" && !conditionMet) {
 				score = Math.min(score, level.passingScore - 1);
 			}
 			const failState = level.failState as { nudge?: string } | undefined;
@@ -686,6 +688,7 @@ export const evaluateAgentSubmission = action({
 			whatUserSees: level.whatUserSees,
 			visibleHints: args.visibleHints,
 			criteria: grading.criteria,
+			difficulty: level.difficulty,
 		});
 
 		const generated = await generateTextWithQuota(ctx, {
@@ -695,18 +698,27 @@ export const evaluateAgentSubmission = action({
 				"You are a strict reviewer of AI agent instructions. Judge the user's prompt only against the hidden rubric and the criteria, and respond only with valid JSON.",
 		});
 
-		const { passed, reasons } = parseLlmJudgeResponse(
+		const { passed, reasons, overallScore } = parseLlmJudgeResponse(
 			generated.text,
 			grading.criteria,
 		);
-		const { score: criteriaScore } = computeLlmJudgeScore(
-			passed,
-			grading.criteria,
-			grading.passingCondition ?? "All required criteria pass",
-		);
-		const score = Math.round(
-			criteriaScore * 0.8 + promptAssessment.score * 0.2,
-		);
+		const { score: criteriaScore, passed: conditionMet } =
+			computeLlmJudgeScore(
+				passed,
+				grading.criteria,
+				grading.passingCondition ?? "All required criteria pass",
+			);
+		// Holistic quality is the primary score (criteria power the ✓/✗ feedback);
+		// fall back to criteria coverage if the judge omitted overallScore.
+		const quality =
+			typeof overallScore === "number" ? overallScore : criteriaScore;
+		let score = Math.round(quality * 0.8 + promptAssessment.score * 0.2);
+		// Only the strict tier (advanced/boss) hard-requires every required
+		// criterion. Easy & medium reward sensible partial attempts so the learner
+		// keeps moving; gibberish still fails on its low holistic score.
+		if (level.difficulty === "advanced" && !conditionMet) {
+			score = Math.min(score, level.passingScore - 1);
+		}
 
 		const failState = level.failState as { nudge?: string } | undefined;
 		const successState = level.successState as
@@ -748,12 +760,31 @@ export const evaluateAgentSubmission = action({
 	},
 });
 
+/**
+ * Holistic-quality block injected into the prompt-only judges. The per-criterion
+ * results drive the ✓/✗ FEEDBACK; this `overallScore` drives the PASS decision —
+ * a holistic read of how good the prompt is for the task, calibrated by tier so
+ * beginners keep moving and only gibberish/off-topic truly fails.
+ */
+function holisticScoringGuidance(difficulty?: string): string {
+	const tier =
+		difficulty === "beginner"
+			? "This is an introductory exercise — be encouraging. A genuine, on-topic, sensible attempt should comfortably pass even if it misses some details."
+			: difficulty === "advanced"
+				? "This is an advanced challenge — hold a high bar; only a thorough, precise prompt should score high."
+				: "Hold a moderate bar — reward a solid attempt, but expect the main points to be covered.";
+	return `OVERALL QUALITY (this drives the score — most important):
+Rate the prompt AS A WHOLE with "overallScore" (0-100): how good and sensible is this prompt for the task? Judge the QUALITY and coherence of the prompt for what it is trying to achieve — NOT rigid keyword matching. A clear, on-topic, sensible prompt scores well even if it misses some specifics. Reserve very low scores (under 20) for gibberish, empty, or off-topic prompts.
+${tier}`;
+}
+
 function buildAgentLlmJudgePrompt(args: {
 	userPrompt: string;
 	agentBrief?: string;
 	whatUserSees?: string;
 	visibleHints?: string[];
 	criteria: GradingCriterion[];
+	difficulty?: string;
 }): string {
 	const criteriaList = args.criteria
 		.map(
@@ -786,8 +817,15 @@ ${args.visibleHints?.length ? args.visibleHints.map((hint) => `- ${hint}`).join(
 
 EVALUATION RULES:
 - Judge only whether the USER PROMPT satisfies each criterion, using the hidden rubric as the standard for a complete agent specification.
-- A criterion passes only if the user's prompt genuinely addresses it — not if it merely restates the brief.
+- The prompt may be built from a fill-in-the-blank template (e.g. "Sort each email into ___ or ___ based on ___"). The TEMPLATE BOILERPLATE does NOT count — judge ONLY the user's own filled-in words. If the boilerplate is removed, does any real, meaningful specification remain?
+- A criterion passes ONLY if the user's own words genuinely address it. The following MUST FAIL the criteria they're meant to satisfy:
+  - gibberish or random characters (e.g. "asdf", "jkjk")
+  - a single vague or unrelated word that is not a real specification (e.g. "stuff", "thing", "test")
+  - empty slots, or content that merely restates the brief without adding the needed specifics
+- For each criterion's pass/fail, be strict (this is honest feedback): only pass when the user clearly and meaningfully specified the thing; gibberish/off-topic fails.
 - Do not require exact wording; accept any clear, correct expression of the idea.
+
+${holisticScoringGuidance(args.difficulty)}
 
 CRITERIA:
 ${criteriaList}
@@ -796,7 +834,8 @@ Respond with a JSON object only, no prose:
 {
   "results": [
     { "id": "criterion_id", "pass": true, "reason": "brief explanation" }
-  ]
+  ],
+  "overallScore": <0-100 holistic quality of the prompt for the task>
 }`;
 }
 
@@ -807,6 +846,7 @@ function buildCodePromptOnlyJudgePrompt(args: {
 	whatUserSees?: string;
 	instruction?: string;
 	criteria: GradingCriterion[];
+	difficulty?: string;
 }): string {
 	const criteriaList = args.criteria
 		.map(
@@ -846,9 +886,11 @@ EVALUATION RULES:
   - gibberish or random characters (e.g. "asdf", "jkjk", "qwerty")
   - a single vague or unrelated word that is not a real description (e.g. "sex", "stuff", "thing", "test")
   - empty slots, or content that merely repeats the task without adding specifics
-- Be strict: when in doubt, FAIL. Only pass when the user clearly and meaningfully specified the thing.
+- For each criterion's pass/fail, be strict (this is honest feedback): only pass when the user clearly and meaningfully specified the thing; gibberish/off-topic fails.
 - Do not require exact wording; accept any clear, correct, on-topic expression of the idea.
 - Describing the visible outcome (e.g. the actual headline text, the supporting sentence, the button label) counts; the user does not need to describe HTML or code.
+
+${holisticScoringGuidance(args.difficulty)}
 
 CRITERIA:
 ${criteriaList}
@@ -857,7 +899,8 @@ Respond with a JSON object only, no prose:
 {
   "results": [
     { "id": "criterion_id", "pass": true, "reason": "brief explanation" }
-  ]
+  ],
+  "overallScore": <0-100 holistic quality of the prompt for the task>
 }`;
 }
 
@@ -971,9 +1014,14 @@ Respond with a JSON object only, no other text:
 function parseLlmJudgeResponse(
 	responseText: string,
 	criteria: Array<{ id: string; weight: number; required?: boolean }>,
-): { passed: Record<string, boolean>; reasons: Record<string, string> } {
+): {
+	passed: Record<string, boolean>;
+	reasons: Record<string, string>;
+	overallScore?: number;
+} {
 	const passed: Record<string, boolean> = {};
 	const reasons: Record<string, string> = {};
+	let overallScore: number | undefined;
 	try {
 		let jsonText = responseText;
 		const backtickMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -984,6 +1032,7 @@ function parseLlmJudgeResponse(
 		}
 		const parsed = JSON.parse(jsonText.trim()) as {
 			results?: Array<{ id: string; pass: boolean; reason?: string }>;
+			overallScore?: number;
 		};
 		const results = parsed.results ?? [];
 		for (const r of results) {
@@ -993,13 +1042,16 @@ function parseLlmJudgeResponse(
 		for (const c of criteria) {
 			if (passed[c.id] === undefined) passed[c.id] = false;
 		}
+		if (typeof parsed.overallScore === "number") {
+			overallScore = Math.max(0, Math.min(100, Math.round(parsed.overallScore)));
+		}
 	} catch {
 		for (const c of criteria) {
 			passed[c.id] = false;
 			reasons[c.id] = "Could not parse evaluation.";
 		}
 	}
-	return { passed, reasons };
+	return { passed, reasons, overallScore };
 }
 
 function computeLlmJudgeScore(

@@ -18,7 +18,8 @@ import {
 } from "./questProductData";
 
 const ONBOARDING_VERSION = "quest-first-v1";
-const DEFAULT_TRACK_ID: TrackId = "coding";
+// Staged rollout: the agent batch ships first and is the only active track.
+const DEFAULT_TRACK_ID: TrackId = "agent";
 
 const seedLessons = buildLessonDefinitionsFromLegacyLevels(allLevels);
 const seedNodes = buildDefaultQuestNodes(seedLessons);

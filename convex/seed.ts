@@ -425,23 +425,29 @@ export const seedLevels = action({
 		}
 
 		for (const level of allLevels) {
+			// `lessonMode` is an in-code hint for the quest-node builder (e.g. force a
+			// capstone to "boss"); it is not part of the levels table schema, so strip
+			// it before writing to the DB.
+			const { lessonMode: _lessonMode, ...levelForDb } = level as typeof level & {
+				lessonMode?: string;
+			};
 			const existing = await ctx.runQuery(api.queries.getLevelById, {
-				id: level.id,
+				id: levelForDb.id,
 			});
 			if (!existing) {
 				await ctx.runMutation(internal.mutations.createLevel, {
-					...level,
+					...levelForDb,
 					appId: "prompt-pal",
 					isActive: true,
 				});
-				logSeed(`Created level: ${level.title}`);
+				logSeed(`Created level: ${levelForDb.title}`);
 			} else {
 				await ctx.runMutation(internal.mutations.updateLevel, {
-					...level,
+					...levelForDb,
 					appId: "prompt-pal",
 					isActive: true,
 				});
-				logSeed(`Updated level: ${level.title}`);
+				logSeed(`Updated level: ${levelForDb.title}`);
 			}
 		}
 
