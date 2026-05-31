@@ -441,7 +441,10 @@ export const generateText = action({
 export const evaluateCodeSubmission = action({
 	args: {
 		levelId: v.string(),
-		code: v.string(),
+		// Optional: when omitted, the prompt is judged directly against the rubric
+		// (no code is generated). Kept optional for backward compatibility with the
+		// old generate-then-grade flow.
+		code: v.optional(v.string()),
 		userPrompt: v.string(),
 		visibleBrief: v.optional(v.string()),
 		visibleHints: v.optional(v.array(v.string())),
@@ -455,7 +458,7 @@ export const evaluateCodeSubmission = action({
 
 		if (
 			args.userPrompt.length > MAX_PROMPT_LENGTH ||
-			args.code.length > MAX_CODE_LENGTH
+			(args.code?.length ?? 0) > MAX_CODE_LENGTH
 		) {
 			throw new Error("Input too long");
 		}
@@ -486,22 +489,39 @@ export const evaluateCodeSubmission = action({
 					passingCondition?: string;
 			  }
 			| undefined;
+		// Prompt-only mode: no code was generated, so judge the user's prompt
+		// directly against the rubric (one fast AI call, no generation step).
+		const promptOnly = !args.code;
 		const shouldUseCriteriaEvaluation =
 			Boolean(grading?.criteria?.length) &&
-			(!level.testCases?.length ||
+			(promptOnly ||
+				!level.testCases?.length ||
 				level.language === "html" ||
 				grading?.method?.includes("llm_judge"));
 
+		if (promptOnly && !grading?.criteria?.length) {
+			throw new Error("This level cannot be evaluated from the prompt alone.");
+		}
+
 		if (shouldUseCriteriaEvaluation && grading?.criteria) {
-			const judgePrompt = buildCodeLlmJudgePrompt({
-				userPrompt: args.userPrompt,
-				generatedCode: args.code,
-				visibleBrief: args.visibleBrief,
-				visibleHints: args.visibleHints,
-				whatUserSees: level.whatUserSees,
-				starterCode: level.starterCode,
-				criteria: grading.criteria,
-			});
+			const judgePrompt = promptOnly
+				? buildCodePromptOnlyJudgePrompt({
+						userPrompt: args.userPrompt,
+						visibleBrief: args.visibleBrief,
+						visibleHints: args.visibleHints,
+						whatUserSees: level.whatUserSees,
+						instruction: level.description,
+						criteria: grading.criteria,
+					})
+				: buildCodeLlmJudgePrompt({
+						userPrompt: args.userPrompt,
+						generatedCode: args.code as string,
+						visibleBrief: args.visibleBrief,
+						visibleHints: args.visibleHints,
+						whatUserSees: level.whatUserSees,
+						starterCode: level.starterCode,
+						criteria: grading.criteria,
+					});
 			const generated = await generateTextWithQuota(ctx, {
 				userId: identity.subject,
 				prompt: judgePrompt,
@@ -512,14 +532,22 @@ export const evaluateCodeSubmission = action({
 				generated.text,
 				grading.criteria,
 			);
-			const { score: criteriaScore } = computeLlmJudgeScore(
-				passed,
-				grading.criteria,
-				grading.passingCondition ?? "All required criteria pass",
-			);
-			const score = Math.round(
+			const { score: criteriaScore, passed: conditionMet } =
+				computeLlmJudgeScore(
+					passed,
+					grading.criteria,
+					grading.passingCondition ?? "All required criteria pass",
+				);
+			let score = Math.round(
 				criteriaScore * 0.8 + promptAssessment.score * 0.2,
 			);
+			// Enforce the rubric's passing condition: if a REQUIRED criterion fails
+			// (e.g. the prompt never actually specifies a heading), the attempt must
+			// not pass — regardless of the weighted score or prompt-quality floor.
+			// Without this, gibberish in a beginner template still cleared the bar.
+			if (!conditionMet) {
+				score = Math.min(score, level.passingScore - 1);
+			}
 			const failState = level.failState as { nudge?: string } | undefined;
 			const successState = level.successState as
 				| { feedback?: string }
@@ -570,7 +598,7 @@ export const evaluateCodeSubmission = action({
 		);
 
 		const codeResult = await CodeScoringService.scoreCode({
-			code: args.code,
+			code: args.code ?? "",
 			language: level.language || "javascript",
 			testCases: hiddenTestCases,
 			functionName: level.functionName,
@@ -760,6 +788,67 @@ EVALUATION RULES:
 - Judge only whether the USER PROMPT satisfies each criterion, using the hidden rubric as the standard for a complete agent specification.
 - A criterion passes only if the user's prompt genuinely addresses it — not if it merely restates the brief.
 - Do not require exact wording; accept any clear, correct expression of the idea.
+
+CRITERIA:
+${criteriaList}
+
+Respond with a JSON object only, no prose:
+{
+  "results": [
+    { "id": "criterion_id", "pass": true, "reason": "brief explanation" }
+  ]
+}`;
+}
+
+function buildCodePromptOnlyJudgePrompt(args: {
+	userPrompt: string;
+	visibleBrief?: string;
+	visibleHints?: string[];
+	whatUserSees?: string;
+	instruction?: string;
+	criteria: GradingCriterion[];
+}): string {
+	const criteriaList = args.criteria
+		.map(
+			(criterion) =>
+				`- ${criterion.id}: ${criterion.description} (weight: ${criterion.weight}, required: ${criterion.required ?? false})`,
+		)
+		.join("\n");
+
+	return `You are evaluating an AI-assisted coding PROMPT-ENGINEERING exercise.
+
+The user was asked to write a PROMPT describing what they want an AI to build.
+There is NO generated code to inspect — judge the user's PROMPT directly: would a
+competent AI, following ONLY this prompt, produce a result that satisfies each
+criterion? A criterion passes ONLY if the prompt clearly specifies or requests what
+that criterion describes.
+
+THE TASK THE USER WAS GIVEN:
+${args.instruction || args.visibleBrief || "Not provided."}
+
+TARGET — what a successful result should contain (ground truth; the user did not see this verbatim):
+---
+${args.whatUserSees || "Not provided."}
+---
+
+USER PROMPT (evaluate THIS):
+---
+${args.userPrompt}
+---
+
+VISIBLE HINTS the user had:
+${args.visibleHints?.length ? args.visibleHints.map((hint) => `- ${hint}`).join("\n") : "- None"}
+
+EVALUATION RULES:
+- Each criterion is written as if inspecting generated output. Reinterpret it as: "does the user's PROMPT clearly call for this?"
+- The prompt may be built from a fill-in-the-blank template (e.g. "Build a hero section with a ___, ___, and a ___"). The TEMPLATE BOILERPLATE does NOT count — judge ONLY the user's own filled-in words. If the boilerplate is removed, does any real, meaningful description remain?
+- A criterion passes ONLY if the user's own words give a genuine, sensible, on-topic description of it. The following MUST FAIL the content criteria:
+  - gibberish or random characters (e.g. "asdf", "jkjk", "qwerty")
+  - a single vague or unrelated word that is not a real description (e.g. "sex", "stuff", "thing", "test")
+  - empty slots, or content that merely repeats the task without adding specifics
+- Be strict: when in doubt, FAIL. Only pass when the user clearly and meaningfully specified the thing.
+- Do not require exact wording; accept any clear, correct, on-topic expression of the idea.
+- Describing the visible outcome (e.g. the actual headline text, the supporting sentence, the button label) counts; the user does not need to describe HTML or code.
 
 CRITERIA:
 ${criteriaList}

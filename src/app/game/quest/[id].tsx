@@ -12,6 +12,7 @@ import {
 	TextInput,
 	useWindowDimensions,
 } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
@@ -41,9 +42,7 @@ import { AgentBriefPreview } from "@/features/game/components/AgentBriefPreview"
 import { QuestPromptInputCard } from "@/features/game/components/QuestPromptInputCard";
 import { ChallengeBottomSheet } from "@/features/game/components/ChallengeBottomSheet";
 import { ChallengeScoreBar } from "@/features/game/components/ChallengeScoreBar";
-import { CodingPromptExamples } from "@/features/game/components/CodingPromptExamples";
 import { AgentResultTakeaway } from "@/features/game/components/AgentResultTakeaway";
-import { getCodingPromptExamples } from "@/features/game/utils/codingPromptExamples";
 import { TargetExpandModal } from "@/features/game/components/TargetExpandModal";
 import { TargetImageView } from "@/features/game/components/TargetImageView";
 import {
@@ -137,11 +136,6 @@ const getModuleIdFromLevelType = (levelType: string): string => {
 		default:
 			return "image-generation"; // fallback
 	}
-};
-
-const extractCodeFromResponse = (text: string): string => {
-	const match = text.match(/```(?:[a-z]+)?\s*([\s\S]*?)\s*```/i);
-	return (match?.[1] || text).trim();
 };
 
 /** Format starterContext for display in copy brief (llm_judge lessons) */
@@ -280,14 +274,6 @@ export default function QuestScreen() {
 		() => (level ? buildQuestHelpContent(level, visibleHints) : null),
 		[level, visibleHints],
 	);
-	// Curated weak/medium/strong example renders for coding challenges, shown in the
-	// result sheet so players can see what a vague vs. precise prompt would build.
-	// Empty for non-coding levels or coding levels without an authored set.
-	const codingPromptExamples = useMemo(
-		() => getCodingPromptExamples(level),
-		[level],
-	);
-
 	// Hint system state
 	const [hints, setHints] = useState<string[]>([]);
 	const [isLoadingHint, setIsLoadingHint] = useState(false);
@@ -297,8 +283,15 @@ export default function QuestScreen() {
 	const inputAccessoryId = "promptInputAccessory";
 
 	const { loseLife, startLevel, completeLevel, syncToBackend, lives: livesAvailable } = useGameStore();
-	const { updateStreak, addXP, spendXP, setCurrentQuest, xp, learningModules } =
-		useUserProgressStore();
+	const {
+		updateStreak,
+		addXP,
+		spendXP,
+		setCurrentQuest,
+		xp,
+		currentStreak,
+		learningModules,
+	} = useUserProgressStore();
 
 	const checklistItems = useMemo(() => (level ? getLevelChecklistItems(level) : []), [level]);
 	const beginnerLocked = useMemo(
@@ -734,47 +727,10 @@ export default function QuestScreen() {
 				setGeneratedCode(null);
 				setCodeExecutionResult(null);
 
-				const starterCode = (level as { starterCode?: string }).starterCode;
-				const currentCode = generatedCode || starterCode;
-				const codeSystemPrompt = [
-					"You are a coding assistant. The user will give you a prompt to modify or extend the current code.",
-					"",
-					"VISIBLE CHALLENGE:",
-					codeVisibleBrief ||
-						level.description ||
-						"Solve the coding challenge described by the player.",
-					"",
-					visibleHints.length > 0
-						? `VISIBLE GUIDANCE:\n- ${visibleHints.join("\n- ")}`
-						: "",
-					"",
-					currentCode
-						? [
-								"CURRENT CODE (modify this according to the user's prompt):",
-								"```",
-								currentCode,
-								"```",
-								"",
-							].join("\n")
-						: "",
-					"Use the player prompt as the implementation direction. Return the complete modified code.",
-					"Return only executable HTML/JavaScript code. Do not include markdown code fences or explanations.",
-				].join("\n");
-
-				const generateResult = await generateText(prompt, codeSystemPrompt);
-				const generatedCodeText = extractCodeFromResponse(
-					generateResult.result || "",
-				);
-
-				if (!generatedCodeText) {
-					throw new Error("Failed to generate code: no code returned");
-				}
-
-				setGeneratedCode(generatedCodeText);
-
+				// No code generation step: the prompt is judged directly against the
+				// level's rubric (one fast AI call), then we go straight to the result.
 				const evaluation = await evaluateCodeSubmission({
 					levelId: level.id,
-					code: generatedCodeText,
 					userPrompt: prompt,
 					visibleBrief: codeVisibleBrief,
 					visibleHints,
@@ -788,7 +744,7 @@ export default function QuestScreen() {
 				setPromptQuality((evaluation as any).promptQualityScore ?? null);
 				const testResults = normalizeCodeTestResults(evaluation.testResults);
 				setCodeExecutionResult({
-					code: generatedCodeText,
+					code: "",
 					testResults,
 					output: (evaluation.feedback || []).join("\n"),
 					success: userPassed,
@@ -822,10 +778,15 @@ export default function QuestScreen() {
 							{
 								levelId: level.id,
 								score: finalScore,
-								feedback: evaluation.feedback || [],
+								feedback: (evaluation.feedback || []).map((f) =>
+									f.slice(0, 200),
+								),
 								keywordsMatched:
 									passedTestNames.length > 0 ? passedTestNames : [],
-								code: generatedCodeText,
+								// No code is generated anymore; the prompt itself is the
+								// submission artifact (the mutation requires one of
+								// imageUrl/code/copy).
+								code: prompt,
 								testResults: sanitizedTestResults,
 							},
 						);
@@ -852,7 +813,6 @@ export default function QuestScreen() {
 								runId: quest.id as Id<"questRuns">,
 								submissionPayload: {
 									prompt,
-									code: generatedCodeText,
 									score: finalScore,
 								},
 							});
@@ -1457,34 +1417,23 @@ export default function QuestScreen() {
 		);
 
 		const verdictTitle = passed ? "Nailed it!" : "Almost there!";
-		const primaryFeedback =
-			feedback[0] ??
-			(passed
-				? "Great prompt — you covered what mattered."
-				: "Close! Tighten up your prompt and try again.");
 		const builtPreview = renderBuiltPreview();
-		const hasCompare =
-			level.type === "code" && codingPromptExamples.length > 0;
 		const hasAgentTakeaway = level.type === "agent";
-		const hasExtraFeedback = feedback.length > 1;
-		const hasResultDetails =
-			Boolean(builtPreview) ||
-			hasCompare ||
-			hasAgentTakeaway ||
-			hasExtraFeedback;
-		const resultDetailsLabel = hasCompare
-			? "See how prompts compare"
-			: hasAgentTakeaway
-				? "See the takeaway"
-				: "See what you built";
+		// The collapsible "details" toggle only exists for things that genuinely
+		// belong behind a tap (a build preview or the agent takeaway). Coding has
+		// neither anymore, so it shows no toggle — extra feedback renders inline.
+		const hasResultDetails = Boolean(builtPreview) || hasAgentTakeaway;
+		const resultDetailsLabel = hasAgentTakeaway
+			? "See the takeaway"
+			: "See what you built";
 
 		const resultBody = (
 			<View>
 				<View className="items-center mb-5">
-					<Image
-						source={require("../../../../assets/images/simplification.png")}
-						style={{ width: 96, height: 96 }}
-						resizeMode="contain"
+					<ExpoImage
+						source={require("../../../../assets/OBJECTS.svg")}
+						style={{ width: 200, height: 240 }}
+						contentFit="contain"
 					/>
 					<Text className="text-[26px] font-black mt-2" style={{ color: "#3C3C3C" }}>
 						{verdictTitle}
@@ -1519,20 +1468,43 @@ export default function QuestScreen() {
 					delay={120}
 				/>
 
-				{/* One concise, wizard-style takeaway — the single most useful line. */}
-				{primaryFeedback ? (
+				{/* Under the score bars: XP gained and current streak — nothing else. */}
+				<View className="flex-row mt-5" style={{ gap: 12 }}>
 					<View
-						className="mt-4 rounded-2xl p-4"
-						style={{ backgroundColor: "#F7F7F7", borderWidth: 1, borderColor: "#EFEFEF" }}
+						className="flex-1 items-center rounded-2xl py-4"
+						style={{ backgroundColor: "#FFF4E5" }}
 					>
-						<Text className="text-[15px] leading-6" style={{ color: "#3C3C3C" }}>
-							{primaryFeedback}
+						<Text className="text-[24px] font-black" style={{ color: "#FF9600" }}>
+							+{passed ? rewardXp : 0}
+						</Text>
+						<Text
+							className="text-[11px] font-black uppercase tracking-widest mt-0.5"
+							style={{ color: "#FF9600" }}
+						>
+							XP gained
 						</Text>
 					</View>
-				) : null}
+					<View
+						className="flex-1 items-center rounded-2xl py-4"
+						style={{ backgroundColor: "#FFF1F0" }}
+					>
+						<View className="flex-row items-center">
+							<Ionicons name="flame" size={20} color="#FF4B4B" style={{ marginRight: 4 }} />
+							<Text className="text-[24px] font-black" style={{ color: "#FF4B4B" }}>
+								{currentStreak}
+							</Text>
+						</View>
+						<Text
+							className="text-[11px] font-black uppercase tracking-widest mt-0.5"
+							style={{ color: "#FF4B4B" }}
+						>
+							Day streak
+						</Text>
+					</View>
+				</View>
 
-				{/* Everything detailed — the build preview, extra feedback, and the
-				    weak/okay/great comparison — stays one tap away to keep this minimal. */}
+				{/* Build preview (image/copy) or agent takeaway stays one tap away to
+				    keep the result minimal. Coding shows no toggle. */}
 				{hasResultDetails ? (
 					<View className="mt-4">
 						<TouchableOpacity
@@ -1572,25 +1544,6 @@ export default function QuestScreen() {
 											{builtPreview}
 										</View>
 									</>
-								) : null}
-
-								{hasExtraFeedback ? (
-									<View className="mb-4">
-										{feedback.slice(1, 4).map((line, index) => (
-											<View key={index} className="flex-row mb-1.5">
-												<Text className="mr-2" style={{ color: passed ? "#58CC02" : "#FF9600" }}>
-													•
-												</Text>
-												<Text className="flex-1 text-[14px] leading-5" style={{ color: "#3C3C3C" }}>
-													{line}
-												</Text>
-											</View>
-										))}
-									</View>
-								) : null}
-
-								{hasCompare ? (
-									<CodingPromptExamples examples={codingPromptExamples} />
 								) : null}
 
 								{hasAgentTakeaway ? (
