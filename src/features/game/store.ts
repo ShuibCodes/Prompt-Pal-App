@@ -90,6 +90,7 @@ export interface GameState {
 	// Current game state
 	currentLevelId: string | null;
 	lives: number;
+	livesUpdatedAt: number;
 	score: number;
 	isPlaying: boolean;
 
@@ -102,6 +103,7 @@ export interface GameState {
 	endLevel: () => void;
 	loseLife: () => Promise<void>;
 	resetLives: () => void;
+	regenerateLives: () => void;
 	unlockLevel: (levelId: string) => Promise<void>;
 	completeLevel: (levelId: string) => Promise<void>;
 	resetProgress: () => void;
@@ -114,9 +116,17 @@ export interface GameState {
 	syncToBackend: () => Promise<void>;
 }
 
+// Hearts: capped at MAX_LIVES, regenerating one every LIFE_REGEN_MS so a player
+// who burns through them is never permanently locked out.
+export const MAX_LIVES = 5;
+const LIFE_REGEN_MS = 20 * 60 * 1000; // 20 minutes per heart
+
 const initialState = {
 	currentLevelId: null,
-	lives: 3,
+	lives: MAX_LIVES,
+	// Timestamp the regen clock counts from. 0 = "unknown" (e.g. legacy state) →
+	// regenerateLives() treats it as fully cooled down and refills.
+	livesUpdatedAt: 0,
 	score: 0,
 	isPlaying: false,
 	unlockedLevels: ["image-1-easy"], // First level always unlocked
@@ -186,10 +196,14 @@ export const useGameStore = create<GameState>()(
 			},
 
 			loseLife: async () => {
-				const currentLives = get().lives;
+				const { lives: currentLives, livesUpdatedAt } = get();
 				if (currentLives > 0) {
 					const newLives = currentLives - 1;
-					set({ lives: newLives });
+					// Start the regen clock the moment we drop from full; if already
+					// regenerating, keep the existing clock running.
+					const newLivesUpdatedAt =
+						currentLives >= MAX_LIVES ? Date.now() : livesUpdatedAt || Date.now();
+					set({ lives: newLives, livesUpdatedAt: newLivesUpdatedAt });
 
 					// If lives reach 0, end of current level but don't reset lives
 					// This allows level select to show locked state
@@ -213,7 +227,26 @@ export const useGameStore = create<GameState>()(
 			},
 
 			resetLives: () => {
-				set({ lives: 3 });
+				set({ lives: MAX_LIVES, livesUpdatedAt: 0 });
+			},
+
+			// Refill hearts based on elapsed time (one per LIFE_REGEN_MS). Call when
+			// entering a challenge / before a retry. A missing clock (legacy or fresh
+			// state) is treated as fully cooled down and refills to max.
+			regenerateLives: () => {
+				const { lives, livesUpdatedAt } = get();
+				if (lives >= MAX_LIVES) return;
+				const now = Date.now();
+				if (!livesUpdatedAt) {
+					set({ lives: MAX_LIVES, livesUpdatedAt: now });
+					return;
+				}
+				const gained = Math.floor((now - livesUpdatedAt) / LIFE_REGEN_MS);
+				if (gained <= 0) return;
+				const newLives = Math.min(MAX_LIVES, lives + gained);
+				const newLivesUpdatedAt =
+					newLives >= MAX_LIVES ? now : livesUpdatedAt + gained * LIFE_REGEN_MS;
+				set({ lives: newLives, livesUpdatedAt: newLivesUpdatedAt });
 			},
 
 			unlockLevel: async (levelId: string) => {
@@ -396,6 +429,7 @@ export const useGameStore = create<GameState>()(
 				completedLevels: state.completedLevels,
 				currentLevelId: state.currentLevelId,
 				lives: state.lives,
+				livesUpdatedAt: state.livesUpdatedAt,
 				score: state.score,
 				isPlaying: state.isPlaying,
 			}),

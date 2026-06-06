@@ -64,7 +64,7 @@ export function useConvexAI() {
 
 	const evaluateCodeSubmission = async (options: {
 		levelId: string;
-		code: string;
+		code?: string;
 		userPrompt: string;
 		visibleBrief?: string;
 		visibleHints?: string[];

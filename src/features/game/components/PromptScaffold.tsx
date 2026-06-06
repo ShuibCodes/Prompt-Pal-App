@@ -62,9 +62,12 @@ export function PromptScaffoldHelper({
 		scaffoldType === "template" &&
 		Boolean(scaffoldTemplate) &&
 		!hideTemplateCard;
+	// The checklist only guides on the challenge screen when there are NO gaps to
+	// give away (i.e. the "checklist" scaffold tier — free text). On template tiers
+	// the gaps already guide, so showing the checklist next to them would spoil the
+	// answer; it moves to the result screen as tick/cross feedback instead.
 	const shouldShowChecklist =
-		(scaffoldType === "template" || scaffoldType === "checklist") &&
-		checklistItems.length > 0;
+		scaffoldType === "checklist" && checklistItems.length > 0;
 
 	if (!shouldShowTemplate && !shouldShowChecklist) {
 		return null;

@@ -88,9 +88,12 @@ export function getInitialPromptStateForLevel(level?: Level | null): string {
 }
 
 export function shouldShowChecklist(level?: Level | null): boolean {
+	// Only the "checklist" tier (free text, no gaps) shows the checklist on the
+	// challenge screen. Template tiers have gaps that would be given away, so their
+	// checklist becomes result-screen feedback instead.
 	return (
 		Boolean(level) &&
-		(level?.scaffoldType === "template" || level?.scaffoldType === "checklist") &&
+		level?.scaffoldType === "checklist" &&
 		getLevelChecklistItems(level).length > 0
 	);
 }
