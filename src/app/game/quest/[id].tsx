@@ -19,7 +19,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Button, Card, Badge } from "@/components/ui";
-import { processApiLevelsWithLocalAssets } from "@/features/levels/data";
+import { processApiLevelsWithLocalAssets, getLocalImageForLevel } from "@/features/levels/data";
 import { useGameStore, Level, ChallengeType, MAX_LIVES } from "@/features/game/store";
 import { useUserProgressStore } from "@/features/user/store";
 import { useConvexAI } from "@/hooks/useConvexAI";
@@ -78,8 +78,18 @@ function mapQuestLessonToLevel(lesson: any): Level {
 		unlocked: true,
 		order: lesson.nodeOrder,
 		points: lesson.rewardXp,
-		targetImageUrl: lesson.targetPayload?.targetImageUrl,
-		targetImageUrlForEvaluation: lesson.targetPayload?.targetImageUrl,
+		// Image challenges render a bundled local target asset (a require() number).
+		// The quest-product lesson has no targetImageUrl, so resolve the local asset
+		// by id; scoring falls back to the whatUserSees rubric (no URL needed).
+		targetImageUrl:
+			lesson.lessonType === "image"
+				? (lesson.targetPayload?.targetImageUrl ??
+					getLocalImageForLevel(lesson.id))
+				: lesson.targetPayload?.targetImageUrl,
+		targetImageUrlForEvaluation:
+			typeof lesson.targetPayload?.targetImageUrl === "string"
+				? lesson.targetPayload.targetImageUrl
+				: undefined,
 		hiddenPromptKeywords: lesson.evaluationPayload?.hiddenPromptKeywords,
 		style: lesson.targetPayload?.style,
 		instruction: lesson.contentPayload?.instruction,
@@ -1193,6 +1203,9 @@ export default function QuestScreen() {
 		const passed = lastScore != null && lastScore >= (level.passingScore ?? 70);
 		const rewardXp = quest?.xpReward || level.points || 50;
 		const categoryLabel = (level.type || "code").toUpperCase();
+		// Image challenges are deliberately minimal: just the target image and a
+		// one-line "Recreate this" instruction — no brief, checklist, or scaffold.
+		const isImage = level.type === "image";
 		const levelNum = level.order || 1;
 		const totalHearts = MAX_LIVES;
 
@@ -1341,20 +1354,22 @@ export default function QuestScreen() {
 					prompt={prompt}
 					onChangePrompt={handlePromptChange}
 					promptPlaceholder={
-						level.type === "agent"
-							? "Write the prompt that instructs this agent…"
-							: level.type === "copywriting"
-								? "Describe the copy you want…"
-								: "Describe what you want to build…"
+						isImage
+							? "Describe the image so AI can recreate it…"
+							: level.type === "agent"
+								? "Write the prompt that instructs this agent…"
+								: level.type === "copywriting"
+									? "Describe the copy you want…"
+									: "Describe what you want to build…"
 					}
-					scaffoldType={level.scaffoldType}
-					scaffoldTemplate={level.scaffoldTemplate}
-					beginnerTemplateLocked={beginnerLocked}
+					scaffoldType={isImage ? undefined : level.scaffoldType}
+					scaffoldTemplate={isImage ? undefined : level.scaffoldTemplate}
+					beginnerTemplateLocked={isImage ? false : beginnerLocked}
 					onBeginnerTemplateSlotsFilledChange={handleBeginnerSlotsFilledChange}
 					onBeginnerSlotValuesJoinedChange={handleBeginnerSlotValuesJoined}
 					onBeginnerSlotValuesArrayChange={handleBeginnerSlotValuesArray}
-					checklistItems={checklistItems}
-					matchedChecklistItems={matchedChecklistItems}
+					checklistItems={isImage ? [] : checklistItems}
+					matchedChecklistItems={isImage ? [] : matchedChecklistItems}
 					inputRef={promptInputRef}
 					onPromptFocus={handlePromptFocus}
 					inputAccessoryViewID={Platform.OS === "ios" ? inputAccessoryId : undefined}
@@ -1579,7 +1594,7 @@ export default function QuestScreen() {
 											style={{ color: "#3C3C3C" }}
 											numberOfLines={2}
 										>
-											{level.title}
+											{isImage ? "Recreate this image" : level.title}
 										</Text>
 									</View>
 

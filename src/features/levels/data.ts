@@ -62,7 +62,7 @@ const LEVEL_IMAGE_ASSETS = {
 // Note: getHostedImageUrlForLevel removed - backend now provides URLs directly
 
 // Helper function to get local image asset for a level ID
-function getLocalImageForLevel(levelId: string): any {
+export function getLocalImageForLevel(levelId: string): any {
 	const image = LEVEL_IMAGE_ASSETS[levelId as keyof typeof LEVEL_IMAGE_ASSETS];
 	if (!image) {
 		console.warn(

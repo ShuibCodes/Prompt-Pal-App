@@ -1297,6 +1297,15 @@ export const generateImage = action({
 				model: google("gemini-2.5-flash-image"),
 				prompt: args.prompt,
 				maxRetries: 0,
+				// Gemini image models only return image bytes when IMAGE output is
+				// explicitly requested. Without this the call succeeds (HTTP 200) but
+				// result.files is empty → "No image generated". Required for the
+				// generate→compare→score image-challenge loop to work.
+				providerOptions: {
+					google: {
+						responseModalities: ["IMAGE"],
+					},
+				},
 			});
 		} catch (error) {
 			const durationMs = Date.now() - startedAt;

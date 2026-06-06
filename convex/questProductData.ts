@@ -168,8 +168,8 @@ export const DEFAULT_LEARNING_TRACKS: LearningTrackSeed[] = [
 		iconKey: "image",
 		themeKey: "amber",
 		sortOrder: 1,
-		// Staged rollout: agent batch ships first. Hidden until its batch is rebuilt.
-		isActive: false,
+		// Image batch is built: shown as a daily challenge type alongside Agent.
+		isActive: true,
 	},
 	{
 		id: "coding",

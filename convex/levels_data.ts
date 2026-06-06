@@ -604,9 +604,8 @@ function mapAgentLessonToLevel(
 
 export const agentLevels = agentLessons.map(mapAgentLessonToLevel);
 
-// Staged rollout: only the agent batch is live right now. The seeder removes any
-// level not in this list, so coding/image/copywriting/daily levels are
-// intentionally dark until we rebuild those batches. Their data + mappings stay
-// in this file (imageLevels, codeLevels, copywritingLevels, questLevelsData) so
-// re-enabling a batch is just adding it back to this array.
-export const allLevels = [...agentLevels];
+// Staged rollout: agent + image batches are live. The seeder removes any level
+// not in this list, so coding/copywriting/daily levels stay dark until rebuilt.
+// Their data + mappings remain in this file (codeLevels, copywritingLevels,
+// questLevelsData) so re-enabling a batch is just adding it back to this array.
+export const allLevels = [...agentLevels, ...imageLevels];
