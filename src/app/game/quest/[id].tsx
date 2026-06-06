@@ -110,10 +110,25 @@ function mapQuestLessonToLevel(lesson: any): Level {
 		wordLimit: lesson.evaluationPayload?.wordLimit,
 		requiredElements: lesson.targetPayload?.requiredElements,
 		metrics: lesson.evaluationPayload?.metrics,
-		scaffoldType: lesson.scaffoldPayload?.scaffoldType,
-		scaffoldTemplate: lesson.scaffoldPayload?.scaffoldTemplate,
-		checklistItems: lesson.scaffoldPayload?.checklistItems,
-		promptChecklist: lesson.scaffoldPayload?.promptChecklist,
+		// Image challenges are free-text ("just an image + recreate this"): no
+		// scaffold template, checklist, or beginner slot-fill. Stripping these here
+		// also stops the prompt box being pre-seeded with the template string.
+		scaffoldType:
+			lesson.lessonType === "image"
+				? undefined
+				: lesson.scaffoldPayload?.scaffoldType,
+		scaffoldTemplate:
+			lesson.lessonType === "image"
+				? undefined
+				: lesson.scaffoldPayload?.scaffoldTemplate,
+		checklistItems:
+			lesson.lessonType === "image"
+				? undefined
+				: lesson.scaffoldPayload?.checklistItems,
+		promptChecklist:
+			lesson.lessonType === "image"
+				? undefined
+				: lesson.scaffoldPayload?.promptChecklist,
 		hints: lesson.contentPayload?.hints ?? [],
 	};
 }
