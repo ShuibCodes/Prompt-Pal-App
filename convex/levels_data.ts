@@ -457,7 +457,8 @@ function mapCodingLessonToLevel(
 		scaffoldType === "template" ? lesson.checklistItems : undefined;
 	// The final hard challenge is the coding-track capstone — give it the boss
 	// moment (boss node icon on the path).
-	const lessonMode = lesson.id === "code-5-hard" ? ("boss" as const) : undefined;
+	const lessonMode =
+		lesson.id === "code-30-hard" ? ("boss" as const) : undefined;
 	return {
 		id: lesson.id,
 		type: "code" as const,
@@ -604,8 +605,9 @@ function mapAgentLessonToLevel(
 
 export const agentLevels = agentLessons.map(mapAgentLessonToLevel);
 
-// Staged rollout: agent + image batches are live. The seeder removes any level
-// not in this list, so coding/copywriting/daily levels stay dark until rebuilt.
-// Their data + mappings remain in this file (codeLevels, copywritingLevels,
+// Staged rollout: agent + coding (30-level prompt-engineering track) are live.
+// Image is hidden for launch and copywriting is dropped, so neither is seeded.
+// The seeder removes any level not in this list, so the hidden batches stay dark.
+// Their data + mappings remain in this file (imageLevels, copywritingLevels,
 // questLevelsData) so re-enabling a batch is just adding it back to this array.
-export const allLevels = [...agentLevels, ...imageLevels];
+export const allLevels = [...agentLevels, ...codeLevels];

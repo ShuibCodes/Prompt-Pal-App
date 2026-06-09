@@ -20,13 +20,12 @@ describe("quest product domain data", () => {
 		const lessons = buildLessonDefinitionsFromLegacyLevels(levelsData);
 
 		expect(lessons.length).toBeGreaterThan(20);
-		expect(lessons.find((lesson: any) => lesson.trackId === "image-generation")).toMatchObject({
-			trackId: "image-generation",
-			lessonType: "image",
-			mode: "teaching",
-			nodeOrder: 1,
-			heartsCost: 1,
-			masteryThreshold: 90,
+		// Coding is live for launch (image is hidden, so no image lessons seed).
+		expect(
+			lessons.find((lesson: any) => lesson.trackId === "coding"),
+		).toMatchObject({
+			trackId: "coding",
+			lessonType: "code",
 			isActive: true,
 		});
 		expect(lessons[0].contentPayload).toEqual(
@@ -46,8 +45,14 @@ describe("quest product domain data", () => {
 		const lessons = buildLessonDefinitionsFromLegacyLevels(levelsData);
 		const nodes = buildDefaultQuestNodes(lessons);
 
-		for (const track of DEFAULT_LEARNING_TRACKS) {
-			const trackNodes = nodes.filter((node) => node.trackId === track.id);
+		// Only tracks with seeded lessons (agent + coding) build a path; hidden
+		// tracks (image, copywriting) have no lessons and therefore no nodes.
+		const trackIdsWithLessons = [
+			...new Set(lessons.map((lesson: any) => lesson.trackId)),
+		];
+		expect(trackIdsWithLessons.length).toBeGreaterThan(0);
+		for (const trackId of trackIdsWithLessons) {
+			const trackNodes = nodes.filter((node) => node.trackId === trackId);
 			expect(trackNodes.length).toBeGreaterThan(0);
 			expect(trackNodes[0]).toMatchObject({
 				pathOrder: 1,
@@ -61,17 +66,12 @@ describe("quest product domain data", () => {
 		});
 	});
 
-	it("exposes the active learning tracks (image, coding, copywriting, agent) in sort order", () => {
+	it("exposes the active learning tracks (coding, agent) in sort order", () => {
 		const activeTracks = [...DEFAULT_LEARNING_TRACKS]
 			.filter((track) => track.isActive)
 			.sort((a, b) => a.sortOrder - b.sortOrder);
 
-		expect(activeTracks.map((track) => track.id)).toEqual([
-			"image-generation",
-			"coding",
-			"copywriting",
-			"agent",
-		]);
+		expect(activeTracks.map((track) => track.id)).toEqual(["coding", "agent"]);
 		// The selector filters by isActive, so it can still hide a track without
 		// deleting its lesson content.
 		expect(activeTracks.every((track) => track.isActive)).toBe(true);

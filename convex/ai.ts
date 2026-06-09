@@ -20,7 +20,9 @@ import {
 	assessCodePromptQuality,
 	assessCopyPromptQuality,
 	assessImagePromptQuality,
+	STRATEGIC_SIGNALS,
 } from "../src/lib/scoring/promptQuality";
+import { detectLowEffortSubmission } from "../src/lib/scoring/lowEffortGuard";
 
 // Validate environment variable at startup
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -66,6 +68,10 @@ type PromptEvaluationResult = {
 	score: number;
 	promptQualityScore: number;
 	feedback: string[];
+	// Set when the submission was rejected as "not a real attempt" (gibberish or
+	// off-topic) before/instead of scoring. The client shows a friendly nudge and
+	// does NOT mark the level passed or spend a heart.
+	notAnAttempt?: boolean;
 };
 
 type GradingCriterion = {
@@ -438,6 +444,19 @@ export const generateText = action({
 	},
 });
 
+/** Result returned when a submission is rejected as "not a real attempt". */
+function notAnAttemptResult(
+	message: string,
+): PromptEvaluationResult & { testResults: any[] } {
+	return {
+		score: 0,
+		promptQualityScore: 0,
+		feedback: [message],
+		notAnAttempt: true,
+		testResults: [],
+	};
+}
+
 export const evaluateCodeSubmission = action({
 	args: {
 		levelId: v.string(),
@@ -468,6 +487,24 @@ export const evaluateCodeSubmission = action({
 		});
 		if (!level || level.type !== "code") {
 			throw new Error("Coding level not found");
+		}
+
+		// Reject "not a real attempt" input (char soup / off-topic chatter) before
+		// spending an AI call, so gibberish can never be scored as a pass.
+		const lowEffort = detectLowEffortSubmission({
+			userPrompt: args.userPrompt,
+			references: [
+				args.visibleBrief,
+				level.title,
+				level.description,
+				level.moduleTitle,
+				...(args.visibleHints || []),
+				...(level.promptChecklist || []),
+			],
+			strategicSignals: STRATEGIC_SIGNALS.code,
+		});
+		if (lowEffort.isLowEffort && lowEffort.message) {
+			return notAnAttemptResult(lowEffort.message);
 		}
 
 		const promptAssessment = assessCodePromptQuality({
@@ -529,10 +566,18 @@ export const evaluateCodeSubmission = action({
 				context:
 					"You are a strict frontend code reviewer. Evaluate only against the criteria and respond only with valid JSON.",
 			});
-			const { passed, reasons, overallScore } = parseLlmJudgeResponse(
-				generated.text,
-				grading.criteria,
-			);
+			const { passed, reasons, overallScore, isRealAttempt } =
+				parseLlmJudgeResponse(generated.text, grading.criteria);
+			// AI backstop for off-topic chatter that slipped past the deterministic
+			// guard: if the judge says this isn't a genuine attempt at the task,
+			// reject it as not-an-attempt instead of scoring it. (Only the
+			// prompt-only judge emits isRealAttempt; the code judge leaves it
+			// undefined, so this never affects the generated-code path.)
+			if (isRealAttempt === false) {
+				return notAnAttemptResult(
+					"That doesn't look like a real attempt at this challenge. Re-read the brief, then write a prompt describing what you want the AI to build for this specific task.",
+				);
+			}
 			const { score: criteriaScore, passed: conditionMet } =
 				computeLlmJudgeScore(
 					passed,
@@ -657,6 +702,23 @@ export const evaluateAgentSubmission = action({
 
 		const visibleBrief = args.agentBrief ?? level.agentBrief;
 
+		// Reject "not a real attempt" input (char soup / off-topic chatter) before
+		// spending an AI call, so gibberish can never be scored as a pass.
+		const lowEffort = detectLowEffortSubmission({
+			userPrompt: args.userPrompt,
+			references: [
+				visibleBrief,
+				level.title,
+				level.description,
+				...(args.visibleHints || []),
+				...(level.promptChecklist || []),
+			],
+			strategicSignals: STRATEGIC_SIGNALS.agent,
+		});
+		if (lowEffort.isLowEffort && lowEffort.message) {
+			return notAnAttemptResult(lowEffort.message);
+		}
+
 		const promptAssessment = assessAgentPromptQuality({
 			userPrompt: args.userPrompt,
 			// Only PUBLIC references — never the hidden whatUserSees rubric — so a
@@ -698,10 +760,16 @@ export const evaluateAgentSubmission = action({
 				"You are a strict reviewer of AI agent instructions. Judge the user's prompt only against the hidden rubric and the criteria, and respond only with valid JSON.",
 		});
 
-		const { passed, reasons, overallScore } = parseLlmJudgeResponse(
-			generated.text,
-			grading.criteria,
-		);
+		const { passed, reasons, overallScore, isRealAttempt } =
+			parseLlmJudgeResponse(generated.text, grading.criteria);
+		// AI backstop for off-topic chatter that slipped past the deterministic
+		// guard (shares an incidental word with the task): if the judge says this
+		// isn't a genuine attempt, reject it as not-an-attempt instead of scoring.
+		if (isRealAttempt === false) {
+			return notAnAttemptResult(
+				"That doesn't look like a real attempt at this challenge. Re-read the agent brief, then write a prompt that tells the agent how to do this specific job.",
+			);
+		}
 		const { score: criteriaScore, passed: conditionMet } =
 			computeLlmJudgeScore(
 				passed,
@@ -827,6 +895,9 @@ EVALUATION RULES:
 
 ${holisticScoringGuidance(args.difficulty)}
 
+IS THIS A REAL ATTEMPT?
+Set "isRealAttempt" to false ONLY when the prompt is clearly not a genuine attempt at THIS task — i.e. random characters/gibberish (e.g. "asdkjhasd"), or coherent but completely off-topic / unrelated to the agent's job (e.g. a greeting like "How are you?", chit-chat, or a prompt for a different task). A genuine but weak or incomplete on-topic attempt is still a real attempt (true).
+
 CRITERIA:
 ${criteriaList}
 
@@ -835,7 +906,8 @@ Respond with a JSON object only, no prose:
   "results": [
     { "id": "criterion_id", "pass": true, "reason": "brief explanation" }
   ],
-  "overallScore": <0-100 holistic quality of the prompt for the task>
+  "overallScore": <0-100 holistic quality of the prompt for the task>,
+  "isRealAttempt": <true if this is a genuine on-topic attempt at the task, false if gibberish or off-topic>
 }`;
 }
 
@@ -892,6 +964,9 @@ EVALUATION RULES:
 
 ${holisticScoringGuidance(args.difficulty)}
 
+IS THIS A REAL ATTEMPT?
+Set "isRealAttempt" to false ONLY when the prompt is clearly not a genuine attempt at THIS task — i.e. random characters/gibberish (e.g. "asdkjhasd"), or coherent but completely off-topic / unrelated to the task (e.g. a greeting like "How are you?", chit-chat, or a prompt for a different challenge). A genuine but weak or incomplete on-topic attempt is still a real attempt (true).
+
 CRITERIA:
 ${criteriaList}
 
@@ -900,7 +975,8 @@ Respond with a JSON object only, no prose:
   "results": [
     { "id": "criterion_id", "pass": true, "reason": "brief explanation" }
   ],
-  "overallScore": <0-100 holistic quality of the prompt for the task>
+  "overallScore": <0-100 holistic quality of the prompt for the task>,
+  "isRealAttempt": <true if this is a genuine on-topic attempt at the task, false if gibberish or off-topic>
 }`;
 }
 
@@ -953,6 +1029,9 @@ EVALUATION RULES:
 VISIBLE HINTS:
 ${args.visibleHints?.length ? args.visibleHints.map((hint) => `- ${hint}`).join("\n") : "- None"}
 
+IS THIS A REAL ATTEMPT?
+Set "isRealAttempt" to false ONLY when the USER PROMPT is clearly not a genuine attempt at this task — i.e. random characters/gibberish, or coherent but completely off-topic / unrelated (e.g. a greeting like "How are you?", chit-chat, or a prompt for a different challenge). A genuine but weak or incomplete on-topic attempt is still a real attempt (true).
+
 CRITERIA:
 ${criteriaList}
 
@@ -960,7 +1039,8 @@ Respond with a JSON object only, no prose:
 {
   "results": [
     { "id": "criterion_id", "pass": true, "reason": "brief explanation" }
-  ]
+  ],
+  "isRealAttempt": <true if the user prompt is a genuine on-topic attempt, false if gibberish or off-topic>
 }`;
 }
 
@@ -1018,10 +1098,14 @@ function parseLlmJudgeResponse(
 	passed: Record<string, boolean>;
 	reasons: Record<string, string>;
 	overallScore?: number;
+	/** Judge's verdict on whether the prompt is a genuine attempt at the task.
+	 * Only emitted by the agent + code-prompt-only judges; undefined elsewhere. */
+	isRealAttempt?: boolean;
 } {
 	const passed: Record<string, boolean> = {};
 	const reasons: Record<string, string> = {};
 	let overallScore: number | undefined;
+	let isRealAttempt: boolean | undefined;
 	try {
 		let jsonText = responseText;
 		const backtickMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -1033,6 +1117,7 @@ function parseLlmJudgeResponse(
 		const parsed = JSON.parse(jsonText.trim()) as {
 			results?: Array<{ id: string; pass: boolean; reason?: string }>;
 			overallScore?: number;
+			isRealAttempt?: boolean;
 		};
 		const results = parsed.results ?? [];
 		for (const r of results) {
@@ -1045,13 +1130,16 @@ function parseLlmJudgeResponse(
 		if (typeof parsed.overallScore === "number") {
 			overallScore = Math.max(0, Math.min(100, Math.round(parsed.overallScore)));
 		}
+		if (typeof parsed.isRealAttempt === "boolean") {
+			isRealAttempt = parsed.isRealAttempt;
+		}
 	} catch {
 		for (const c of criteria) {
 			passed[c.id] = false;
 			reasons[c.id] = "Could not parse evaluation.";
 		}
 	}
-	return { passed, reasons, overallScore };
+	return { passed, reasons, overallScore, isRealAttempt };
 }
 
 function computeLlmJudgeScore(

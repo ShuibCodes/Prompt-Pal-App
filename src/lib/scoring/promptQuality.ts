@@ -24,6 +24,63 @@ function clamp(value: number, min = 0, max = 100): number {
 	return Math.min(max, Math.max(min, value));
 }
 
+/** Domain signal words that mark a genuine, on-task prompt. Shared with the
+ * low-effort guard so the two stay in sync. */
+export const STRATEGIC_SIGNALS: Record<
+	"code" | "copy" | "image" | "agent",
+	string[]
+> = {
+	code: [
+		"edge case",
+		"handle empty",
+		"return",
+		"javascript",
+		"function",
+		"valid",
+		"no imports",
+		"example",
+	],
+	copy: [
+		"audience",
+		"tone",
+		"benefit",
+		"call to action",
+		"cta",
+		"headline",
+		"structure",
+		"objection",
+		"variant",
+		"persona",
+	],
+	image: [
+		"subject",
+		"composition",
+		"lighting",
+		"background",
+		"foreground",
+		"camera",
+		"angle",
+		"style",
+		"texture",
+		"color palette",
+	],
+	agent: [
+		"trigger",
+		"input",
+		"when",
+		"rule",
+		"decision",
+		"if",
+		"output",
+		"format",
+		"edge case",
+		"otherwise",
+		"do not",
+		"must not",
+		"never",
+	],
+};
+
 function assessPromptQuality({
 	userPrompt,
 	publicReferences,
@@ -134,16 +191,7 @@ export function assessCodePromptQuality(input: {
 	return assessPromptQuality({
 		...input,
 		domain: "code",
-		strategicSignals: [
-			"edge case",
-			"handle empty",
-			"return",
-			"javascript",
-			"function",
-			"valid",
-			"no imports",
-			"example",
-		],
+		strategicSignals: STRATEGIC_SIGNALS.code,
 	});
 }
 
@@ -155,18 +203,7 @@ export function assessCopyPromptQuality(input: {
 	return assessPromptQuality({
 		...input,
 		domain: "copy",
-		strategicSignals: [
-			"audience",
-			"tone",
-			"benefit",
-			"call to action",
-			"cta",
-			"headline",
-			"structure",
-			"objection",
-			"variant",
-			"persona",
-		],
+		strategicSignals: STRATEGIC_SIGNALS.copy,
 	});
 }
 
@@ -178,21 +215,7 @@ export function assessAgentPromptQuality(input: {
 	return assessPromptQuality({
 		...input,
 		domain: "agent",
-		strategicSignals: [
-			"trigger",
-			"input",
-			"when",
-			"rule",
-			"decision",
-			"if",
-			"output",
-			"format",
-			"edge case",
-			"otherwise",
-			"do not",
-			"must not",
-			"never",
-		],
+		strategicSignals: STRATEGIC_SIGNALS.agent,
 	});
 }
 
@@ -204,17 +227,6 @@ export function assessImagePromptQuality(input: {
 	return assessPromptQuality({
 		...input,
 		domain: "image",
-		strategicSignals: [
-			"subject",
-			"composition",
-			"lighting",
-			"background",
-			"foreground",
-			"camera",
-			"angle",
-			"style",
-			"texture",
-			"color palette",
-		],
+		strategicSignals: STRATEGIC_SIGNALS.image,
 	});
 }

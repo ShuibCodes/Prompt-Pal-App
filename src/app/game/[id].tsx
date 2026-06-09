@@ -739,6 +739,17 @@ export default function GameScreen() {
 					visibleHints,
 				});
 
+				// Not a real attempt (gibberish / off-topic): show a friendly nudge
+				// and stop — no result screen, no pass, no heart spent.
+				if ((evaluation as any).notAnAttempt) {
+					Alert.alert(
+						"Give it a real try",
+						evaluation.feedback?.[0] ??
+							"That doesn't look like an attempt at this challenge yet.",
+					);
+					return;
+				}
+
 				const finalScore = evaluation.score;
 				const userPassed = finalScore >= level.passingScore;
 

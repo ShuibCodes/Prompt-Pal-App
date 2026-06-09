@@ -20,7 +20,7 @@ const getIsoDateString = (date: Date): string =>
 	date.toISOString().split("T")[0];
 
 import { questLevelsData } from "./quest_levels_data";
-import { imageLevels, codeLevels, agentLevels } from "./levels_data";
+import { codeLevels, agentLevels } from "./levels_data";
 
 const pickRandom = <T>(items: readonly T[]): T => {
 	return items[Math.floor(Math.random() * items.length)];
@@ -1983,12 +1983,14 @@ export const generateDailyQuestPool = internalMutation({
 			points?: number;
 			difficulty: "beginner" | "intermediate" | "advanced";
 		};
+		// Only rotate over types that are actually seeded/live (allLevels = agent +
+		// code). Image is hidden for launch, so it's excluded — otherwise an
+		// "image day" would mint a daily quest pointing at an unseeded level.
 		const rotation: Array<{
 			type: "code" | "image" | "agent";
 			pool: ReadonlyArray<DailyQuestSource>;
 		}> = [
 			{ type: "code", pool: codeLevels as ReadonlyArray<DailyQuestSource> },
-			{ type: "image", pool: imageLevels as ReadonlyArray<DailyQuestSource> },
 			{ type: "agent", pool: agentLevels as ReadonlyArray<DailyQuestSource> },
 		];
 		const dayIndex = Math.floor(now / 86_400_000);

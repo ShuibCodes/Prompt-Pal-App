@@ -673,6 +673,18 @@ export default function QuestScreen() {
 			return; // Already completed today's quest
 		}
 
+		// Out of hearts blocks a fresh Submit too, not just "Try again", so the
+		// hearts system actually gates play. Refill elapsed hearts first, then
+		// re-read the fresh count (the destructured value is a stale snapshot).
+		useGameStore.getState().regenerateLives();
+		if (useGameStore.getState().lives <= 0) {
+			Alert.alert(
+				"Out of hearts",
+				"You're out of hearts for now. They refill over time — head back to the path and come back soon.",
+			);
+			return;
+		}
+
 		setIsGenerating(true);
 		setResultChecklist([]);
 		try {
@@ -801,6 +813,17 @@ export default function QuestScreen() {
 					visibleHints,
 				});
 
+				// Not a real attempt (gibberish / off-topic): show a friendly nudge
+				// and stop — no result screen, no pass, no heart spent.
+				if ((evaluation as any).notAnAttempt) {
+					Alert.alert(
+						"Give it a real try",
+						evaluation.feedback?.[0] ??
+							"That doesn't look like an attempt at this challenge yet.",
+					);
+					return;
+				}
+
 				const finalScore = evaluation.score;
 				const userPassed = finalScore >= level.passingScore;
 
@@ -821,112 +844,112 @@ export default function QuestScreen() {
 					passingScore: level.passingScore,
 				});
 
-				try {
-					if (user?.id) {
-						const passedTestNames = (evaluation.testResults || [])
-							.filter((r: any) => r.passed && r.name)
-							.map((r: any) => r.name)
-							.filter((name: any): name is string => name !== undefined);
+				// Show the result the instant the judge returns. Persisting the
+				// attempt, progress, streak and XP all run in the background so the
+				// player never waits on bookkeeping round-trips and a transient
+				// backend error can't hide the result screen after a genuine pass.
+				// (A life is charged only on "Try again", never on the failed attempt.)
+				setPhase("result");
+				setSnapIndex(2);
+				Keyboard.dismiss();
 
-						const sanitizedTestResults = (evaluation.testResults || []).map(
-							(r: any) => ({
-								...r,
-								id: r.id ?? undefined,
-								name: r.name ?? undefined,
-								error: r.error ?? undefined,
-								output: r.output ?? undefined,
-								expectedOutput: r.expectedOutput ?? undefined,
-								actualOutput: r.actualOutput ?? undefined,
-								executionTime: r.executionTime ?? undefined,
-							}),
-						);
+				void (async () => {
+					try {
+						if (user?.id) {
+							const passedTestNames = (evaluation.testResults || [])
+								.filter((r: any) => r.passed && r.name)
+								.map((r: any) => r.name)
+								.filter((name: any): name is string => name !== undefined);
 
-						await convexHttpClient.mutation(
-							api.mutations.saveUserLevelAttempt,
-							{
-								levelId: level.id,
-								score: finalScore,
-								feedback: (evaluation.feedback || []).map((f) =>
-									f.slice(0, 200),
-								),
-								keywordsMatched:
-									passedTestNames.length > 0 ? passedTestNames : [],
-								// No code is generated anymore; the prompt itself is the
-								// submission artifact (the mutation requires one of
-								// imageUrl/code/copy).
-								code: prompt,
-								testResults: sanitizedTestResults,
-							},
-						);
-
-						const attempts = await convexHttpClient.query(
-							api.queries.getUserLevelAttempts,
-							{
-								levelId: level.id,
-							},
-						);
-						setAttemptHistory(attempts || []);
-					}
-				} catch (saveError) {
-					logger.warn("GameScreen", "Failed to save attempt", {
-						error: saveError,
-					});
-				}
-
-				if (userPassed) {
-					let shouldAwardXp = true;
-					if (user?.id && quest) {
-						if ((quest as any).isQuestRun) {
-							await convexHttpClient.mutation(api.questProduct.submitQuestAttempt, {
-								runId: quest.id as Id<"questRuns">,
-								submissionPayload: {
-									prompt,
-									score: finalScore,
-								},
-							});
-							const rewardResult = await convexHttpClient.mutation(
-								api.questProduct.claimQuestRewards,
-								{ runId: quest.id as Id<"questRuns"> },
+							const sanitizedTestResults = (evaluation.testResults || []).map(
+								(r: any) => ({
+									...r,
+									id: r.id ?? undefined,
+									name: r.name ?? undefined,
+									error: r.error ?? undefined,
+									output: r.output ?? undefined,
+									expectedOutput: r.expectedOutput ?? undefined,
+									actualOutput: r.actualOutput ?? undefined,
+									executionTime: r.executionTime ?? undefined,
+								}),
 							);
-							if (rewardResult?.alreadyClaimed) shouldAwardXp = false;
-						} else {
-							const result = await convexHttpClient.mutation(
-								api.mutations.completeDailyQuest,
+
+							await convexHttpClient.mutation(
+								api.mutations.saveUserLevelAttempt,
 								{
-									questId: quest.id,
+									levelId: level.id,
 									score: finalScore,
+									feedback: (evaluation.feedback || []).map((f) =>
+										f.slice(0, 200),
+									),
+									keywordsMatched:
+										passedTestNames.length > 0 ? passedTestNames : [],
+									// No code is generated anymore; the prompt itself is the
+									// submission artifact (the mutation requires one of
+									// imageUrl/code/copy).
+									code: prompt,
+									testResults: sanitizedTestResults,
 								},
 							);
-							if (result?.alreadyCompleted) shouldAwardXp = false;
+
+							const attempts = await convexHttpClient.query(
+								api.queries.getUserLevelAttempts,
+								{ levelId: level.id },
+							);
+							setAttemptHistory(attempts || []);
 						}
-					}
-					if (user?.id) {
-						const nextAttemptsCount = (attemptHistory?.length ?? 0) + 1;
-						await convexHttpClient.mutation(api.mutations.updateLevelProgress, {
-							appId: "prompt-pal",
-							levelId: level.id,
-							isCompleted: true,
-							bestScore: finalScore,
-							attempts: nextAttemptsCount,
-							completedAt: Date.now(),
+
+						if (userPassed) {
+							let shouldAwardXp = true;
+							if (user?.id && quest) {
+								if ((quest as any).isQuestRun) {
+									await convexHttpClient.mutation(
+										api.questProduct.submitQuestAttempt,
+										{
+											runId: quest.id as Id<"questRuns">,
+											submissionPayload: { prompt, score: finalScore },
+										},
+									);
+									const rewardResult = await convexHttpClient.mutation(
+										api.questProduct.claimQuestRewards,
+										{ runId: quest.id as Id<"questRuns"> },
+									);
+									if (rewardResult?.alreadyClaimed) shouldAwardXp = false;
+								} else {
+									const result = await convexHttpClient.mutation(
+										api.mutations.completeDailyQuest,
+										{ questId: quest.id, score: finalScore },
+									);
+									if (result?.alreadyCompleted) shouldAwardXp = false;
+								}
+							}
+							if (user?.id) {
+								const nextAttemptsCount = (attemptHistory?.length ?? 0) + 1;
+								await convexHttpClient.mutation(
+									api.mutations.updateLevelProgress,
+									{
+										appId: "prompt-pal",
+										levelId: level.id,
+										isCompleted: true,
+										bestScore: finalScore,
+										attempts: nextAttemptsCount,
+										completedAt: Date.now(),
+									},
+								);
+							}
+							await updateStreak();
+							await completeLevel(level.id);
+							syncToBackend().catch(() => {});
+							if (shouldAwardXp) await addXP(quest?.xpReward || 50);
+							setQuest((q: any) => (q ? { ...q, completed: true } : q));
+							if (quest) setCurrentQuest({ ...quest, completed: true });
+						}
+					} catch (bookkeepingError) {
+						logger.warn("GameScreen", "Background save/progress failed", {
+							error: bookkeepingError,
 						});
 					}
-					await updateStreak();
-					await completeLevel(level.id);
-					syncToBackend().catch(() => {});
-					if (shouldAwardXp) await addXP(quest?.xpReward || 50);
-					setQuest((q: any) => (q ? { ...q, completed: true } : q));
-					if (quest) setCurrentQuest({ ...quest, completed: true });
-					setPhase("result");
-					setSnapIndex(2);
-					Keyboard.dismiss();
-				} else {
-					// A life is charged when the player chooses "Try again", not on the
-					// failed attempt itself, so show the result either way.
-					setPhase("result");
-					setSnapIndex(2);
-					Keyboard.dismiss();
-				}
+				})();
 			} else if (level.type === "copywriting") {
 				const copyGenerationPrompt = [
 					"You are a conversion-focused copywriter.",
@@ -1064,6 +1087,17 @@ export default function QuestScreen() {
 					agentBrief: level.agentBrief,
 					visibleHints,
 				});
+
+				// Not a real attempt (gibberish / off-topic): show a friendly nudge
+				// and stop — no result screen, no pass, no heart spent.
+				if ((evaluation as any).notAnAttempt) {
+					Alert.alert(
+						"Give it a real try",
+						evaluation.feedback?.[0] ??
+							"That doesn't look like an attempt at this challenge yet.",
+					);
+					return;
+				}
 
 				const finalScore = evaluation.score;
 				const userPassed = finalScore >= level.passingScore;

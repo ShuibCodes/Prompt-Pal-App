@@ -168,8 +168,9 @@ export const DEFAULT_LEARNING_TRACKS: LearningTrackSeed[] = [
 		iconKey: "image",
 		themeKey: "amber",
 		sortOrder: 1,
-		// Image batch is built: shown as a daily challenge type alongside Agent.
-		isActive: true,
+		// Image is hidden from the track switcher for launch (client decision).
+		// Lessons/data remain for a future release.
+		isActive: false,
 	},
 	{
 		id: "coding",
@@ -179,8 +180,8 @@ export const DEFAULT_LEARNING_TRACKS: LearningTrackSeed[] = [
 		iconKey: "code",
 		themeKey: "green",
 		sortOrder: 2,
-		// Staged rollout: agent batch ships first. Hidden until its batch is rebuilt.
-		isActive: false,
+		// Live for launch: the 30-level prompt-engineering coding track.
+		isActive: true,
 	},
 	{
 		id: "copywriting",
