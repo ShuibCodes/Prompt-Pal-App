@@ -172,8 +172,15 @@ In `src/app/game/quest/[id].tsx`, added `const isImage = level.type === "image"`
 ---
 
 ## 11. HARD RULES (do not violate)
+- always prompt Ahmed to share the status of the app visibily as Shuayb is very busy, launching his new cohort for his online programe. Ideally share a video, going through the UI as if hes a test user.
 - **Do NOT push to `changes-ahmed` or `shuayb-tweaks`.** Work on `ahmed-shuayb-combined` (or branch off it).
 - **Do NOT alter Shuayb's design intent** without confirmation — he's the client and can reject.
 - **Never put the Gemini key in a tracked file.** It belongs in Convex env only.
 - **Don't over‑claim "done."** Verify (tsc, getQuestHome, simulator) and report honestly what is/isn't proven.
 - **Confirm before destructive/outward actions.** Pushing the combined branch is pre‑authorized; pushing elsewhere is not.
+
+---
+
+## Thurs 11th June:
+- **What we did:** Wired up RevenueCat in **Test Store mode** — added `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` (test_…) + `EXPO_PUBLIC_REQUIRE_SUBSCRIPTION=1` to `.env.local`, and set the backend secret `REVENUECAT_API_KEY` (sk_…) in dev Convex env (`dev:wary-robin-754`). The paywall gate is now live, so the Buy + Restore flow can be tested without TestFlight.
+- **Waiting on:** Apple to reply to Shuayb's email about opening up the developer account. Until then RevenueCat stays on the **Test Store** (no real App Store products); real IAP products come once Apple activates the account.
