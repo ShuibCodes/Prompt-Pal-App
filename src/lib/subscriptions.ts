@@ -11,6 +11,15 @@ import {
 	type SubscriptionTier,
 } from "@/lib/subscriptionShared";
 
+/**
+ * MVP testing: RevenueCat is disabled so the app launches without native SDK init.
+ * To re-enable payments later:
+ *   1. Set REVENUECAT_ENABLED = true
+ *   2. Set EXPO_PUBLIC_REVENUECAT_IOS_API_KEY + EXPO_PUBLIC_REQUIRE_SUBSCRIPTION=1 in .env.local
+ *   3. Set REVENUECAT_API_KEY in Convex env
+ */
+const REVENUECAT_ENABLED = false;
+
 const APP_ID = "prompt-pal";
 const IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY?.trim() ?? "";
 const ENTITLEMENT_KEY =
@@ -62,7 +71,15 @@ export function getLegalUrls() {
 	};
 }
 
+export function isRevenueCatEnabled(): boolean {
+	return REVENUECAT_ENABLED;
+}
+
 export function isSubscriptionFeatureAvailable(): boolean {
+	if (!REVENUECAT_ENABLED) {
+		return false;
+	}
+
 	return (
 		Platform.OS === "ios" &&
 		Boolean(IOS_API_KEY) &&
@@ -71,6 +88,10 @@ export function isSubscriptionFeatureAvailable(): boolean {
 }
 
 export function isSubscriptionGateEnabled(): boolean {
+	if (!REVENUECAT_ENABLED) {
+		return false;
+	}
+
 	return (
 		process.env.EXPO_PUBLIC_REQUIRE_SUBSCRIPTION === "1" &&
 		isSubscriptionFeatureAvailable()
@@ -80,6 +101,11 @@ export function isSubscriptionGateEnabled(): boolean {
 export async function configureRevenueCat(
 	appUserId?: string | null,
 ): Promise<boolean> {
+	// Stubbed for MVP — skip native Purchases.configure entirely.
+	if (!REVENUECAT_ENABLED) {
+		return false;
+	}
+
 	if (!isSubscriptionFeatureAvailable()) {
 		if (
 			Platform.OS === "ios" &&
