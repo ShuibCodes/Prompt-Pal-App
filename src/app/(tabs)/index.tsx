@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, TouchableOpacity, View, StyleSheet, ScrollView, Text } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StatCapsule } from '@/features/new-ui/components/StatCapsule';
@@ -9,16 +9,15 @@ import { XpIcon, StreakIcon } from '@/features/new-ui/components/CustomIcons';
 import { useRouter } from 'expo-router';
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api.js";
+import { isDevQuestToolsEnabled } from "@/lib/devQuest";
 
 export default function QuestScreen() {
   const router = useRouter();
-  const [selectedTrackId, setSelectedTrackId] = useState<string | undefined>();
-  const questHome = useQuery(
-    api.questProduct.getQuestHome,
-    selectedTrackId ? { trackId: selectedTrackId } : {},
-  );
+  const questHome = useQuery(api.questProduct.getQuestHome, {});
   const startQuestRun = useMutation(api.questProduct.startQuestRun);
-  const switchActiveTrack = useMutation(api.questProduct.switchActiveTrack);
+  const devUnlockAllQuestNodes = useMutation(api.questProduct.devUnlockAllQuestNodes);
+  const [isUnlockingAll, setIsUnlockingAll] = useState(false);
+  const devToolsEnabled = isDevQuestToolsEnabled();
 
   const handleStartQuest = async (nodeId?: string) => {
     const targetNodeId = nodeId ?? questHome?.activeNode?.id;
@@ -29,9 +28,20 @@ export default function QuestScreen() {
     router.push(`/game/quest/${result.runId}`);
   };
 
-  const handleSwitchTrack = async (trackId: string) => {
-    setSelectedTrackId(trackId);
-    await switchActiveTrack({ trackId });
+  const handleDevUnlockAll = async () => {
+    setIsUnlockingAll(true);
+    try {
+      await devUnlockAllQuestNodes({});
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not unlock all nodes.";
+      Alert.alert(
+        "Dev unlock failed",
+        `${message}\n\nRun: npx convex env set ALLOW_DEV_QUEST_TOOLS 1`,
+      );
+    } finally {
+      setIsUnlockingAll(false);
+    }
   };
 
   if (!questHome) {
@@ -73,24 +83,6 @@ export default function QuestScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.trackSwitcher}>
-          {questHome.tracks.map((track) => {
-            const isActive = track.id === questHome.activeTrack.id;
-            return (
-              <TouchableOpacity
-                key={track.id}
-                style={[styles.trackChip, isActive && styles.trackChipActive]}
-                onPress={() => handleSwitchTrack(track.id)}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.trackChipText, isActive && styles.trackChipTextActive]}>
-                  {track.title}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
         <FeaturedCourseCard
           level={questHome.featuredCourse.level}
           track={questHome.featuredCourse.track}
@@ -107,11 +99,39 @@ export default function QuestScreen() {
           }))}
           onNodePress={(nodeId) => {
             const node = questHome.nodes.find((item) => item.id === nodeId);
-            if (node?.status === "current" || node?.status === "unlocked" || node?.status === "special") {
+            if (!node) {
+              return;
+            }
+            if (
+              devToolsEnabled ||
+              node.status === "current" ||
+              node.status === "unlocked" ||
+              node.status === "special"
+            ) {
               handleStartQuest(nodeId);
             }
           }}
         />
+
+        {devToolsEnabled ? (
+          <View style={styles.devBar}>
+            <Text style={styles.devLabel}>DEV: tap any node to open it</Text>
+            <Pressable
+              onPress={handleDevUnlockAll}
+              disabled={isUnlockingAll}
+              style={({ pressed }) => [
+                styles.devUnlockButton,
+                (pressed || isUnlockingAll) && styles.devUnlockButtonPressed,
+              ]}
+            >
+              {isUnlockingAll ? (
+                <ActivityIndicator color="#FF9600" size="small" />
+              ) : (
+                <Text style={styles.devUnlockText}>Unlock all</Text>
+              )}
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* Fill space at bottom for scrolling */}
         <View style={{ height: 100 }} />
@@ -157,34 +177,43 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: 10,
   },
-  trackSwitcher: {
+  devBar: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: "#FFF9EE",
+    borderWidth: 1,
+    borderColor: "#FFE6BF",
     flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  trackChip: {
-    flex: 1,
     alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: "#E5E5E5",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  devLabel: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FF9600",
+  },
+  devUnlockButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
     backgroundColor: "#FFFFFF",
-    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#FFE6BF",
+    minWidth: 96,
+    alignItems: "center",
   },
-  trackChipActive: {
-    borderColor: "#58CC02",
-    backgroundColor: "#ECFFE5",
+  devUnlockButtonPressed: {
+    opacity: 0.75,
   },
-  trackChipText: {
-    color: "#777777",
-    fontFamily: "DIN Round Pro",
-    fontSize: 13,
-    fontWeight: "900",
-    textTransform: "uppercase",
-  },
-  trackChipTextActive: {
-    color: "#3C3C3C",
+  devUnlockText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#FF9600",
   },
 });

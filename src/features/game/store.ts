@@ -84,6 +84,10 @@ export interface Level {
 	scaffoldType?: "template" | "checklist" | "none";
 	scaffoldTemplate?: string;
 	checklistItems?: string[];
+
+	/** Pre-challenge Prompty intro copy (from quest lesson contentPayload). */
+	introPromise?: string;
+	introSecret?: string;
 }
 
 export interface GameState {

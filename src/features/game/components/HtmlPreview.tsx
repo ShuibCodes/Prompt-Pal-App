@@ -4,7 +4,22 @@ import { WebView } from "react-native-webview";
 import type { WebViewMessageEvent } from "react-native-webview";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { sanitizeHtmlForWebView } from "@/lib/htmlSanitizer";
+import { TAILWIND_PLAY_CDN_SRC } from "./tailwindPlayCdn";
 import type React from "react";
+
+/** Local (vendored) Tailwind Play CDN — no network fetch. */
+const TAILWIND_SCRIPT_TAG = `<script src="${TAILWIND_PLAY_CDN_SRC}"></script>`;
+
+/**
+ * Swap any remote Tailwind CDN <script> for the local vendored one so the WebView
+ * never blocks on a network download (the cause of the blank/slow preview window).
+ */
+function withLocalTailwind(html: string): string {
+	return html.replace(
+		/<script\b[^>]*\bsrc\s*=\s*["'][^"']*(?:cdn\.tailwindcss\.com|cdn\.jsdelivr\.net\/npm\/tailwindcss)[^"']*["'][^>]*><\/script>/gi,
+		TAILWIND_SCRIPT_TAG,
+	);
+}
 
 interface HtmlPreviewProps {
 	html: string;
@@ -118,18 +133,19 @@ export function HtmlPreview({
 
 	if (!html || !html.trim()) return null;
 
-	const sanitized = sanitizeHtmlForWebView(html);
-	const tailwindScript = '<script src="https://cdn.tailwindcss.com"></script>';
+	// Sanitize, then point any remote Tailwind CDN script at the local vendored
+	// copy so the WebView renders instantly and offline (no network round-trip).
+	const sanitized = withLocalTailwind(sanitizeHtmlForWebView(html));
 	let wrappedHtml = sanitized.includes("<html")
 		? sanitized
-		: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">${tailwindScript}</head><body>${sanitized}</body></html>`;
+		: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">${TAILWIND_SCRIPT_TAG}</head><body>${sanitized}</body></html>`;
 
 	if (
 		sanitized.includes("<html") &&
-		!sanitized.includes("tailwindcss.com") &&
+		!sanitized.includes(TAILWIND_PLAY_CDN_SRC) &&
 		sanitized.includes("class=")
 	) {
-		wrappedHtml = wrappedHtml.replace("</head>", `${tailwindScript}</head>`);
+		wrappedHtml = wrappedHtml.replace("</head>", `${TAILWIND_SCRIPT_TAG}</head>`);
 	}
 
 	if (isBlankPage(wrappedHtml)) {

@@ -63,12 +63,7 @@ export function CompleteScreen() {
 		void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 		try {
 			await completeBackendOnboarding({
-				selectedTrackId:
-					selectedModule === "coding" ||
-					selectedModule === "image-generation" ||
-					selectedModule === "copywriting"
-						? selectedModule
-						: "coding",
+				selectedTrackId: "mixed",
 				experienceLevel: "beginner",
 				reasonForLearning: "onboarding-complete",
 				selectedGoals: badges.length > 0 ? badges : ["prompt-apprentice"],

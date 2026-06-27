@@ -13,13 +13,18 @@ import {
 	TextInput,
 	useWindowDimensions,
 } from "react-native";
-import { Image as ExpoImage } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { Button, Card, Badge } from "@/components/ui";
-import { processApiLevelsWithLocalAssets, getLocalImageForLevel } from "@/features/levels/data";
+import {
+	processApiLevelsWithLocalAssets,
+	getLocalImageForLevel,
+	getCodingGoalImageForLevel,
+} from "@/features/levels/data";
 import { useGameStore, Level, ChallengeType, MAX_LIVES } from "@/features/game/store";
 import { useUserProgressStore } from "@/features/user/store";
 import { useConvexAI } from "@/hooks/useConvexAI";
@@ -45,9 +50,15 @@ import { ChallengeScoreBar } from "@/features/game/components/ChallengeScoreBar"
 import { TargetExpandModal } from "@/features/game/components/TargetExpandModal";
 import { TargetImageView } from "@/features/game/components/TargetImageView";
 import {
+	ImageComparisonRow,
+	type ImageComparisonPhase,
+} from "@/features/game/image/ImageComparisonRow";
+import {
 	findFirstPlaceholderRange,
 	HINT_XP_COST,
 } from "@/features/game/components/PromptScaffold";
+import { DevQuestToolbar } from "@/components/dev/DevQuestToolbar";
+import { isDevQuestToolsEnabled } from "@/lib/devQuest";
 import type { CodeTestResult } from "@/lib/scoring/codeScoring";
 import type { CopyScoringResult } from "@/lib/scoring/copyScoring";
 import { buildQuestHelpContent } from "@/features/game/utils/questHelp";
@@ -63,6 +74,51 @@ import {
 	getLessonTargetBrief,
 	hasMeaningfulHtmlPreview,
 } from "@/features/game/utils/lessonTarget";
+import { PromptyChallengeIntro } from "@/features/game/components/PromptyChallengeIntro";
+import { PromptyScoringOverlay } from "@/features/game/components/PromptyScoringOverlay";
+import {
+	shouldShowChallengeIntro,
+	useIntroStore,
+	waitForIntroStoreHydration,
+} from "@/features/game/introStore";
+import { PromptyMascot } from "@/features/challenge-preview/PromptyMascot";
+import { GameButton } from "@/features/challenge-preview/GameButton";
+import { Confetti } from "@/features/challenge-preview/Confetti";
+
+function getScoringMessages(levelType: string | undefined): string[] {
+	switch (levelType) {
+		case "image":
+			return [
+				"Painting your image…",
+				"Mixing the colours…",
+				"Checking your shapes…",
+				"Scoring your prompt…",
+				"Almost there…",
+			];
+		case "code":
+			return [
+				"Reading your prompt…",
+				"Building the screen…",
+				"Comparing to the goal…",
+				"Scoring your prompt…",
+				"Almost there…",
+			];
+		case "copy":
+			return [
+				"Reading your copy…",
+				"Weighing the words…",
+				"Scoring your prompt…",
+				"Almost there…",
+			];
+		default:
+			return [
+				"Reading your prompt…",
+				"Thinking it over…",
+				"Scoring your prompt…",
+				"Almost there…",
+			];
+	}
+}
 
 function mapQuestLessonToLevel(lesson: any): Level {
 	return {
@@ -130,6 +186,8 @@ function mapQuestLessonToLevel(lesson: any): Level {
 				? undefined
 				: lesson.scaffoldPayload?.promptChecklist,
 		hints: lesson.contentPayload?.hints ?? [],
+		introPromise: lesson.contentPayload?.introPromise,
+		introSecret: lesson.contentPayload?.introSecret,
 	};
 }
 
@@ -249,12 +307,16 @@ export default function QuestScreen() {
 	const [copyScoringResult, setCopyScoringResult] =
 		useState<CopyScoringResult | null>(null);
 	const [activeTab, setActiveTab] = useState<"target" | "attempt">("target");
+	// Image challenges show a live Target vs. Your image row. "painting" while the
+	// image generates, "scoring" once it's revealed and evaluation runs, "idle"
+	// otherwise (the generated image stays visible through the result screen).
+	const [imagePhase, setImagePhase] = useState<ImageComparisonPhase>("idle");
 	// Option B challenge sheet: which phase the sheet shows (prompt vs result),
 	// whether it is expanded, the prompt-quality score (second result bar), and
 	// whether the full-screen target preview is open.
-	const [phase, setPhase] = useState<"prompt" | "result">("prompt");
+	const [phase, setPhase] = useState<"intro" | "prompt" | "result">("prompt");
 	// Result sheet keeps the build preview + "how prompts compare" panel tucked
-	// behind a tap so the verdict stays minimal (wizard-led) by default.
+	// behind a tap so the verdict stays minimal by default.
 	// Current sheet snap: 0 = peek (target fully visible), 1 = mid (~40%), 2 = full.
 	const [snapIndex, setSnapIndex] = useState(1);
 	const [promptQuality, setPromptQuality] = useState<number | null>(null);
@@ -269,6 +331,8 @@ export default function QuestScreen() {
 		{ label: string; passed: boolean }[]
 	>([]);
 	const [attemptHistory, setAttemptHistory] = useState<UserLevelAttempt[]>([]);
+	const [isDevSkipping, setIsDevSkipping] = useState(false);
+	const devQuestToolsEnabled = isDevQuestToolsEnabled();
 	const [level, setLevel] = useState<Level | null>({
 		id: "mock_level_1",
 		title: "Master the Identity Prompt",
@@ -347,6 +411,19 @@ export default function QuestScreen() {
 	useEffect(() => {
 		regenerateLives();
 	}, [regenerateLives]);
+
+	useEffect(() => {
+		if (phase !== "result" || lastScore == null) {
+			return;
+		}
+		const passed = lastScore >= (level?.passingScore ?? 70);
+		void Haptics.notificationAsync(
+			passed
+				? Haptics.NotificationFeedbackType.Success
+				: Haptics.NotificationFeedbackType.Warning,
+		);
+	}, [lastScore, level?.passingScore, phase]);
+
 	const {
 		updateStreak,
 		addXP,
@@ -414,8 +491,11 @@ export default function QuestScreen() {
 		const loadQuestAndLevel = async () => {
 			setIsLoading(true);
 			setError(null);
+			setPhase("prompt");
 
 			try {
+				await waitForIntroStoreHydration();
+
 				let questRun = null;
 				try {
 					questRun = await convexHttpClient.query(
@@ -436,6 +516,9 @@ export default function QuestScreen() {
 						isQuestRun: true,
 					});
 					setLevel(processedLevel);
+					setPhase(
+						shouldShowChallengeIntro(processedLevel) ? "intro" : "prompt",
+					);
 					startLevel(processedLevel.id);
 					NanoAssistant.resetHintsForLevel(processedLevel.id);
 					setHints([]);
@@ -474,6 +557,9 @@ export default function QuestScreen() {
 					};
 
 					setLevel(processedLevel);
+					setPhase(
+						shouldShowChallengeIntro(processedLevel) ? "intro" : "prompt",
+					);
 					startLevel(processedLevel.id);
 					// Reset hints
 					NanoAssistant.resetHintsForLevel(processedLevel.id);
@@ -629,6 +715,56 @@ export default function QuestScreen() {
 		setShowHelpModal(false);
 	}, [level]);
 
+	const handleDevPreviewResult = useCallback(() => {
+		if (!level) {
+			return;
+		}
+		const previewScore = Math.max(level.passingScore ?? 70, 92);
+		setLastScore(previewScore);
+		setFeedback(["Dev preview — UI only. Path is not advanced until you use Skip & next."]);
+		setMatchedKeywords([]);
+		setPromptQuality(90);
+		setResultChecklist(
+			checklistItems.map((label) => ({
+				label,
+				passed: true,
+			})),
+		);
+		setPhase("result");
+		setSnapIndex(2);
+		Keyboard.dismiss();
+	}, [checklistItems, level]);
+
+	const handleDevSkipAndAdvance = useCallback(async () => {
+		if (!(quest as { isQuestRun?: boolean } | null)?.isQuestRun || !id) {
+			return;
+		}
+		setIsDevSkipping(true);
+		try {
+			await convexHttpClient.mutation(api.questProduct.devSkipQuestRun, {
+				runId: id as Id<"questRuns">,
+				advancePath: true,
+			});
+			setQuest((current: any) =>
+				current ? { ...current, completed: true } : current,
+			);
+			await addXP(quest?.xpReward || level?.points || 50);
+			syncToBackend().catch(() => {});
+			router.replace("/(tabs)/");
+		} catch (error) {
+			const message =
+				error instanceof Error
+					? error.message
+					: "Could not skip this challenge.";
+			Alert.alert(
+				"Dev skip failed",
+				`${message}\n\nRun: npx convex env set ALLOW_DEV_QUEST_TOOLS 1`,
+			);
+		} finally {
+			setIsDevSkipping(false);
+		}
+	}, [addXP, id, level?.points, quest, router, syncToBackend]);
+
 	if (isLoading) {
 		return (
 			<SafeAreaView className="flex-1 bg-background items-center justify-center">
@@ -661,6 +797,19 @@ export default function QuestScreen() {
 		);
 	}
 
+	if (phase === "intro" && level.introPromise && level.introSecret) {
+		return (
+			<PromptyChallengeIntro
+				promise={level.introPromise}
+				secret={level.introSecret}
+				onComplete={() => {
+					useIntroStore.getState().markIntroSeen(level.id);
+					setPhase("prompt");
+				}}
+			/>
+		);
+	}
+
 	const charCount = prompt.length;
 	const tokenCount = Math.ceil(charCount / 4); // Rough estimation
 
@@ -689,6 +838,11 @@ export default function QuestScreen() {
 		setResultChecklist([]);
 		try {
 			if (level.type === "image") {
+				// Two-phase anticipation: "painting" while the image generates, then
+				// reveal it in place and switch to "scoring" while evaluation runs.
+				setGeneratedImage(null);
+				setImagePhase("painting");
+
 				const generateResult = await generateImage(prompt);
 				const generatedImageUrl = generateResult.imageUrl;
 
@@ -697,6 +851,7 @@ export default function QuestScreen() {
 				}
 
 				setGeneratedImage(generatedImageUrl);
+				setImagePhase("scoring");
 				setActiveTab("attempt");
 
 				// Evaluation no longer depends on a fetchable target URL: the server
@@ -717,6 +872,20 @@ export default function QuestScreen() {
 				setFeedback(evaluation.feedback || []);
 				setMatchedKeywords(evaluation.keywordsMatched || []);
 				setPromptQuality((evaluation as any).promptQualityScore ?? null);
+				// Per-aspect ✓/✗ breakdown so a fail shows exactly what to add next.
+				// Built straight from the server's labeled checklist (image levels
+				// strip local checklistItems, so buildResultChecklist can't be used).
+				const imageChecklist = (evaluation as any).checklist as
+					| { name: string; covered: boolean }[]
+					| undefined;
+				setResultChecklist(
+					Array.isArray(imageChecklist)
+						? imageChecklist.map((item) => ({
+								label: item.name,
+								passed: item.covered,
+							}))
+						: [],
+				);
 
 				try {
 					if (user?.id) {
@@ -1206,6 +1375,9 @@ export default function QuestScreen() {
 			Alert.alert(aiError.title, aiError.message);
 		} finally {
 			setIsGenerating(false);
+			// Stop the painting/scoring overlay; the generated image stays visible
+			// (idle still shows it) through the result screen.
+			setImagePhase("idle");
 		}
 	};
 
@@ -1225,6 +1397,7 @@ export default function QuestScreen() {
 		}
 		await loseLife();
 		setGeneratedImage(null);
+		setImagePhase("idle");
 		setGeneratedCode(null);
 		setGeneratedCopy(null);
 		setCodeExecutionResult(null);
@@ -1251,7 +1424,6 @@ export default function QuestScreen() {
 
 		const passed = lastScore != null && lastScore >= (level.passingScore ?? 70);
 		const rewardXp = quest?.xpReward || level.points || 50;
-		const categoryLabel = (level.type || "code").toUpperCase();
 		// Image challenges are deliberately minimal: just the target image and a
 		// one-line "Recreate this" instruction — no brief, checklist, or scaffold.
 		const isImage = level.type === "image";
@@ -1315,51 +1487,18 @@ export default function QuestScreen() {
 
 		const resultFooter = (
 			<View className="flex-row items-center" style={{ gap: 12 }}>
-				<TouchableOpacity
+				<GameButton
+					label={passed ? "Try again" : "Back"}
+					variant="secondary"
 					onPress={passed ? handleTryAgain : handleNextLevel}
-					activeOpacity={0.85}
-					accessibilityRole="button"
-					className="flex-1 items-center justify-center"
-					style={{
-						backgroundColor: "#FFFFFF",
-						borderWidth: 2,
-						borderColor: "#E5E5E5",
-						borderBottomWidth: 4,
-						borderBottomColor: "#E5E5E5",
-						borderRadius: 16,
-						paddingVertical: 12,
-					}}
-				>
-					<Text
-						numberOfLines={1}
-						adjustsFontSizeToFit
-						className="text-[14px] font-black uppercase tracking-wide"
-						style={{ color: "#777777" }}
-					>
-						{passed ? "Try again" : "Back"}
-					</Text>
-				</TouchableOpacity>
-				<TouchableOpacity
+					style={{ flex: 1 }}
+				/>
+				<GameButton
+					label={passed ? "Next level" : "Try again"}
+					variant="primary"
 					onPress={passed ? handleNextLevel : handleTryAgain}
-					activeOpacity={0.85}
-					accessibilityRole="button"
-					className="flex-1 items-center justify-center"
-					style={{
-						backgroundColor: "#58CC02",
-						borderBottomWidth: 4,
-						borderBottomColor: "#46A302",
-						borderRadius: 16,
-						paddingVertical: 14,
-					}}
-				>
-					<Text
-						numberOfLines={1}
-						adjustsFontSizeToFit
-						className="text-white text-[14px] font-black uppercase tracking-wide"
-					>
-						{passed ? "Next level" : "Try again"}
-					</Text>
-				</TouchableOpacity>
+					style={{ flex: 1 }}
+				/>
 			</View>
 		);
 
@@ -1454,17 +1593,29 @@ export default function QuestScreen() {
 
 		const resultBody = (
 			<View>
+				{/* Image challenge: keep the Target vs. Your image comparison on the
+				    result screen so the player always sees what their prompt produced. */}
+				{isImage && generatedImage ? (
+					<View className="mb-5">
+						<ImageComparisonRow
+							targetSource={level.targetImageUrl}
+							generatedUri={generatedImage}
+							phase="idle"
+						/>
+					</View>
+				) : null}
 				<View className="items-center mb-5">
-					<ExpoImage
-						source={require("../../../../assets/OBJECTS.svg")}
-						style={{ width: 260, height: 310 }}
-						contentFit="contain"
-					/>
-					<Text className="text-[26px] font-black mt-2" style={{ color: "#3C3C3C" }}>
+					<PromptyMascot mood={passed ? "happy" : "sad"} size={210} celebrate={passed} />
+					<Animated.Text
+						entering={FadeInDown.delay(120).springify()}
+						className="text-[26px] font-black mt-2"
+						style={{ color: "#3C3C3C" }}
+					>
 						{verdictTitle}
-					</Text>
+					</Animated.Text>
 					{passed ? (
-						<View
+						<Animated.View
+							entering={FadeInDown.delay(200).springify()}
 							className="flex-row items-center px-3 py-1 rounded-full mt-1.5"
 							style={{ backgroundColor: "#FFF4E5" }}
 						>
@@ -1472,16 +1623,20 @@ export default function QuestScreen() {
 							<Text className="text-[14px] font-black" style={{ color: "#FF9600" }}>
 								+{rewardXp} XP
 							</Text>
-						</View>
+						</Animated.View>
 					) : (
-						<View className="px-3 py-1 rounded-full mt-1.5" style={{ backgroundColor: "#FDECEC" }}>
+						<Animated.View
+							entering={FadeInDown.delay(200).springify()}
+							className="px-3 py-1 rounded-full mt-1.5"
+							style={{ backgroundColor: "#FDECEC" }}
+						>
 							<Text
 								className="text-[11px] font-black uppercase tracking-widest"
 								style={{ color: "#E53935" }}
 							>
 								Not passed
 							</Text>
-						</View>
+						</Animated.View>
 					)}
 				</View>
 
@@ -1616,6 +1771,16 @@ export default function QuestScreen() {
 							</View>
 						</View>
 
+						{devQuestToolsEnabled ? (
+							<DevQuestToolbar
+								onPreviewResult={handleDevPreviewResult}
+								onSkipAndAdvance={handleDevSkipAndAdvance}
+								onExitOnly={goBackOrHome}
+								isBusy={isDevSkipping}
+								showSkip={Boolean((quest as { isQuestRun?: boolean } | null)?.isQuestRun)}
+							/>
+						) : null}
+
 						{/* Single scrollable page: brief + prompt section stacked together
 						    (no draggable sheet). Result uses the same full page. */}
 						<ScrollView
@@ -1635,16 +1800,24 @@ export default function QuestScreen() {
 											style={{ backgroundColor: "#E8F7DD" }}
 										>
 											<Text className="text-[11px] font-black tracking-widest" style={{ color: "#58CC02" }}>
-												LEVEL {levelNum}  •  {categoryLabel}
+												CHALLENGE {levelNum}
 											</Text>
 										</View>
 										<Text
 											className="text-[22px] font-black leading-7"
 											style={{ color: "#3C3C3C" }}
-											numberOfLines={2}
+											numberOfLines={isImage ? 2 : undefined}
 										>
 											{isImage ? "Recreate this image" : level.title}
 										</Text>
+										{level.type === "code" && level.instruction ? (
+											<Text
+												className="text-[15px] font-medium leading-6 mt-1.5"
+												style={{ color: "#777777" }}
+											>
+												{level.instruction}
+											</Text>
+										) : null}
 									</View>
 
 									{/* One context, said once. Agent shows a compact text brief.
@@ -1653,6 +1826,15 @@ export default function QuestScreen() {
 									<View className="px-5" style={{ marginTop: 6 }}>
 										{level.type === "agent" ? (
 											<View>{renderLessonTarget(false)}</View>
+										) : isImage ? (
+											// Image challenge: live Target vs. Your image. The user's
+											// generated prompt result appears on the right the moment it
+											// exists and stays visible through scoring.
+											<ImageComparisonRow
+												targetSource={level.targetImageUrl}
+												generatedUri={generatedImage}
+												phase={imagePhase}
+											/>
 										) : (
 											<>
 												<View
@@ -1717,6 +1899,12 @@ export default function QuestScreen() {
 						</View>
 					</KeyboardAvoidingView>
 				</SafeAreaView>
+				{phase === "result" && passed ? <Confetti /> : null}
+
+				<PromptyScoringOverlay
+					visible={isGenerating}
+					messages={getScoringMessages(level.type)}
+				/>
 
 				<TargetExpandModal
 					visible={targetExpanded}
@@ -1812,6 +2000,18 @@ export default function QuestScreen() {
 		}
 
 		if (level.type === "code") {
+			// Prefer the pre-rendered static goal screenshot (no WebView = no lag).
+			// Lessons without a bundled goal fall back to the legacy live preview.
+			const goalImage = getCodingGoalImageForLevel(level.id);
+			if (goalImage) {
+				return (
+					<Image
+						source={goalImage}
+						className="w-full h-full"
+						resizeMode="contain"
+					/>
+				);
+			}
 			return (
 				<HtmlPreview
 					html={

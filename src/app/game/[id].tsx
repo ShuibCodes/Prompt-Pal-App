@@ -19,6 +19,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Button, Input, Card, Badge, ResultModal } from "@/components/ui";
 import {
+	fetchDevLevelsFromApi,
 	fetchLevelsFromApi,
 	processApiLevelsWithLocalAssets,
 } from "@/features/levels/data";
@@ -55,6 +56,8 @@ import {
 	getOrdinalMatchedChecklistItemsForBeginnerTemplate,
 	isBeginnerTemplateLocked,
 } from "@/features/game/utils/scaffold";
+import { DevQuestToolbar } from "@/components/dev/DevQuestToolbar";
+import { isDevQuestToolsEnabled } from "@/lib/devQuest";
 
 const { height: screenHeight } = Dimensions.get("window");
 
@@ -125,8 +128,13 @@ const normalizeCodeTestResults = (results?: any[]): CodeTestResult[] =>
 	}));
 
 export default function GameScreen() {
-	const { id } = useLocalSearchParams();
+	const { id, devLab } = useLocalSearchParams<{
+		id?: string;
+		devLab?: string;
+	}>();
 	const router = useRouter();
+	const devQuestToolsEnabled = isDevQuestToolsEnabled();
+	const isDevImageLab = devLab === "1" && devQuestToolsEnabled;
 	const goBackOrHome = () => {
 		if (router.canGoBack()) {
 			router.back();
@@ -200,6 +208,7 @@ export default function GameScreen() {
 	const [hintCooldown, setHintCooldown] = useState(0);
 	const [showHints, setShowHints] = useState(false);
 	const [moduleLevels, setModuleLevels] = useState<Level[]>([]);
+	const [isDevSkipping, setIsDevSkipping] = useState(false);
 	const inputAccessoryId = "promptInputAccessory";
 
 	const { loseLife, startLevel, completeLevel, syncToBackend } = useGameStore();
@@ -277,7 +286,9 @@ export default function GameScreen() {
 					setHints([]);
 
 					try {
-						const apiLevels = await fetchLevelsFromApi();
+						const apiLevels = isDevImageLab
+							? await fetchDevLevelsFromApi()
+							: await fetchLevelsFromApi();
 						const currentModuleId =
 							processedLevel.moduleId ||
 							getModuleIdFromLevelType(processedLevel.type || "image");
@@ -400,7 +411,56 @@ export default function GameScreen() {
 		if (id) {
 			loadLevel();
 		}
-	}, [id, startLevel, user?.id]);
+	}, [id, isDevImageLab, startLevel, user?.id]);
+
+	const sortedDevImageLevels = useMemo(
+		() =>
+			[...moduleLevels]
+				.filter((entry) => entry.type === "image")
+				.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+		[moduleLevels],
+	);
+
+	const handleDevPreviewResult = useCallback(() => {
+		if (!level) {
+			return;
+		}
+		const previewScore = Math.max(level.passingScore ?? 70, 92);
+		setLastScore(previewScore);
+		setFeedback([
+			"Dev preview — UI only. Path is not advanced until you use Skip & next.",
+		]);
+		setMatchedKeywords([]);
+		setShowResult(true);
+		Keyboard.dismiss();
+	}, [level]);
+
+	const handleDevSkipAndAdvance = useCallback(() => {
+		if (!level || !isDevImageLab) {
+			return;
+		}
+		setIsDevSkipping(true);
+		try {
+			const idx = sortedDevImageLevels.findIndex((entry) => entry.id === level.id);
+			const nextLevel =
+				idx >= 0 && idx < sortedDevImageLevels.length - 1
+					? sortedDevImageLevels[idx + 1]
+					: null;
+			setShowResult(false);
+			setGeneratedImage(null);
+			setPrompt("");
+			setLastScore(null);
+			setFeedback([]);
+			setMatchedKeywords([]);
+			if (nextLevel) {
+				router.replace(`/game/${nextLevel.id}?devLab=1`);
+			} else {
+				router.replace("/dev/image-lab");
+			}
+		} finally {
+			setIsDevSkipping(false);
+		}
+	}, [isDevImageLab, level, router, sortedDevImageLevels]);
 
 	useEffect(() => {
 		const nextPrompt = getInitialPromptStateForLevel(level);
@@ -613,11 +673,7 @@ export default function GameScreen() {
 				setGeneratedImage(generatedImageUrl);
 				setActiveTab("attempt");
 
-				// Step 2: Evaluate the generated image
-				if (!level.targetImageUrlForEvaluation) {
-					throw new Error("No target image URL available for evaluation");
-				}
-
+				// Step 2: Evaluate the generated image (description-based when no hosted target URL).
 				const evaluationResult = await evaluateImage({
 					taskId: level.id,
 					userImageUrl: generatedImageUrl,
@@ -1686,6 +1742,15 @@ export default function GameScreen() {
 		<View className="flex-1 bg-background">
 			{renderHeader()}
 
+			{isDevImageLab && level?.type === "image" ? (
+				<DevQuestToolbar
+					onPreviewResult={handleDevPreviewResult}
+					onSkipAndAdvance={handleDevSkipAndAdvance}
+					onExitOnly={() => router.replace("/dev/image-lab")}
+					isBusy={isDevSkipping}
+				/>
+			) : null}
+
 			<KeyboardAvoidingView
 				className="flex-1"
 				behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -1765,6 +1830,10 @@ export default function GameScreen() {
 				onNext={() => {
 					setShowResult(false);
 					if (!level) {
+						if (isDevImageLab) {
+							router.replace("/dev/image-lab");
+							return;
+						}
 						router.replace(`/game/levels/${getModuleIdFromLevelType("image")}`);
 						return;
 					}
@@ -1776,7 +1845,7 @@ export default function GameScreen() {
 							: moduleId === "coding-logic"
 								? "code"
 								: "copywriting";
-					const sortedLevels = [...moduleLevels]
+					const sortedLevels = (isDevImageLab ? sortedDevImageLevels : [...moduleLevels])
 						.filter((l) => l.moduleId === moduleId || l.type === expectedType)
 						.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 					const idx = sortedLevels.findIndex((l) => l.id === level.id);
@@ -1785,7 +1854,13 @@ export default function GameScreen() {
 							? sortedLevels[idx + 1]
 							: null;
 					if (nextLevel) {
-						router.replace(`/game/${nextLevel.id}`);
+						router.replace(
+							isDevImageLab
+								? `/game/${nextLevel.id}?devLab=1`
+								: `/game/${nextLevel.id}`,
+						);
+					} else if (isDevImageLab) {
+						router.replace("/dev/image-lab");
 					} else {
 						router.replace(`/game/levels/${moduleId}`);
 					}

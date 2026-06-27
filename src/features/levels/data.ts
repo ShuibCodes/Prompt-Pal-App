@@ -59,6 +59,40 @@ const LEVEL_IMAGE_ASSETS = {
 	"level-10": require("../../../assets/images/level-10-image.png"),
 } as const;
 
+/**
+ * Pre-rendered "goal" screenshots for coding challenges, keyed by lesson id.
+ * These replace the old live WebView target (the source of challenge-screen lag):
+ * the screen now shows a static <Image> of the success state the learner is
+ * recreating. Regenerate via `node scripts/generate-coding-goal-images.mjs`.
+ * Only the launch-path coding lessons have goals; others fall back to the legacy
+ * preview.
+ */
+const CODING_GOAL_IMAGE_ASSETS = {
+	"code-1-easy": require("../../../assets/images/coding/code-1-easy-goal.png"),
+	"code-2-easy": require("../../../assets/images/coding/code-2-easy-goal.png"),
+	"code-3-easy": require("../../../assets/images/coding/code-3-easy-goal.png"),
+	"code-4-easy": require("../../../assets/images/coding/code-4-easy-goal.png"),
+	"code-5-easy": require("../../../assets/images/coding/code-5-easy-goal.png"),
+	"code-6-medium": require("../../../assets/images/coding/code-6-medium-goal.png"),
+	"code-8-medium": require("../../../assets/images/coding/code-8-medium-goal.png"),
+	"code-9-medium": require("../../../assets/images/coding/code-9-medium-goal.png"),
+	"code-11-hard": require("../../../assets/images/coding/code-11-hard-goal.png"),
+	"code-16-easy": require("../../../assets/images/coding/code-16-easy-goal.png"),
+	"code-17-easy": require("../../../assets/images/coding/code-17-easy-goal.png"),
+	"code-18-easy": require("../../../assets/images/coding/code-18-easy-goal.png"),
+	"code-19-easy": require("../../../assets/images/coding/code-19-easy-goal.png"),
+	"code-20-easy": require("../../../assets/images/coding/code-20-easy-goal.png"),
+} as const;
+
+/** Local goal screenshot for a coding lesson, or null if none is bundled. */
+export function getCodingGoalImageForLevel(levelId: string): number | null {
+	return (
+		CODING_GOAL_IMAGE_ASSETS[
+			levelId as keyof typeof CODING_GOAL_IMAGE_ASSETS
+		] ?? null
+	);
+}
+
 // Note: getHostedImageUrlForLevel removed - backend now provides URLs directly
 
 // Helper function to get local image asset for a level ID
@@ -262,6 +296,23 @@ export function processApiLevelsWithLocalAssets(apiLevels: Level[]): Level[] {
 					: level.targetImageUrl,
 		};
 	});
+}
+
+export async function fetchDevLevelsFromApi(): Promise<Level[]> {
+	try {
+		const levels = await convexHttpClient.query(api.queries.getDevLevels, {
+			appId: APP_ID,
+		});
+
+		if (levels && levels.length > 0) {
+			return processApiLevelsWithLocalAssets(levels as Level[]);
+		}
+
+		return [];
+	} catch (error) {
+		console.warn("[Levels] Failed to fetch dev levels from API:", error);
+		return [];
+	}
 }
 
 export async function fetchLevelsFromApi(): Promise<Level[]> {

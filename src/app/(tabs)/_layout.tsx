@@ -1,8 +1,6 @@
 import { SubscriptionAccessGuard } from "@/components/SubscriptionAccessGuard";
-import { OnboardingFlow } from "@/features/onboarding/OnboardingFlow";
+import { OnboardingFlowA } from "@/features/onboarding/directionA/OnboardingFlowA";
 import { useOnboardingStore } from "@/features/onboarding/store";
-import { PreOnboardingFlow } from "@/features/pre-onboarding/PreOnboardingFlow";
-import { usePreOnboardingStore } from "@/features/pre-onboarding/store";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@clerk/clerk-expo";
 import {
@@ -123,36 +121,7 @@ function NativeTabShell() {
 }
 
 function TabsNavigator() {
-	// Pre-onboarding state
-	const hasCompletedPreOnboarding = usePreOnboardingStore(
-		(state) => state.hasCompletedPreOnboarding,
-	);
-	const showNewUI = usePreOnboardingStore((state) => state.showNewUI);
-	const forceSkipOnboarding = usePreOnboardingStore((state) => state.forceSkipOnboarding);
-	const [hasPreHydrated, setHasPreHydrated] = useState(() =>
-		usePreOnboardingStore.persist.hasHydrated(),
-	);
-
-	useEffect(() => {
-		const syncPreHydration = () => {
-			setHasPreHydrated(usePreOnboardingStore.persist.hasHydrated());
-		};
-		syncPreHydration();
-		const unsub =
-			usePreOnboardingStore.persist.onFinishHydration(syncPreHydration);
-		return unsub;
-	}, []);
-
-	useEffect(() => {
-		if (hasPreHydrated) {
-			// Keep the imported UI flow enabled if persisted flags drift out of sync.
-			if (hasCompletedPreOnboarding && (!showNewUI || !forceSkipOnboarding)) {
-				usePreOnboardingStore.getState().finishPreOnboarding();
-			}
-		}
-	}, [hasPreHydrated, hasCompletedPreOnboarding, showNewUI]);
-
-	// Existing onboarding state
+	// Live onboarding gate (Direction A completion writes this flag).
 	const hasCompletedOnboarding = useOnboardingStore(
 		(state) => state.hasCompletedOnboarding,
 	);
@@ -170,19 +139,12 @@ function TabsNavigator() {
 		return unsubscribe;
 	}, []);
 
-	// Wait for both stores to hydrate
-	if (!hasPreHydrated || !hasHydrated) {
+	if (!hasHydrated) {
 		return <TabShellFallback message="Restoring your learning space..." />;
 	}
 
-	// Show pre-onboarding first (new screens)
-	if (!hasCompletedPreOnboarding) {
-		return <PreOnboardingFlow />;
-	}
-
-	// Then show gamified onboarding
-	if (!hasCompletedOnboarding && !forceSkipOnboarding) {
-		return <OnboardingFlow />;
+	if (!hasCompletedOnboarding) {
+		return <OnboardingFlowA />;
 	}
 
 	return (

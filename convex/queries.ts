@@ -413,18 +413,42 @@ export const getLevels = query({
 			.filter((q) => q.eq(q.field("isActive"), true))
 			.collect();
 
-		return levels.map((level) => ({
-			id: level.id,
-			type: level.type,
-			title: level.title,
-			difficulty: level.difficulty,
-			targetImageUrl: level.targetImageUrl,
-			hiddenPromptKeywords: level.hiddenPromptKeywords,
-			passingScore: level.passingScore,
-			order: level.order,
-			unlocked: level.unlocked,
-			prerequisites: level.prerequisites,
-		}));
+		return levels
+			.filter((level) => level.isDevOnly !== true)
+			.map((level) => ({
+				id: level.id,
+				type: level.type,
+				title: level.title,
+				difficulty: level.difficulty,
+				targetImageUrl: level.targetImageUrl,
+				hiddenPromptKeywords: level.hiddenPromptKeywords,
+				passingScore: level.passingScore,
+				order: level.order,
+				unlocked: level.unlocked,
+				prerequisites: level.prerequisites,
+			}));
+	},
+});
+
+export const getDevLevels = query({
+	args: {
+		appId: v.string(),
+	},
+	handler: async (ctx, args) => {
+		const { appId } = args;
+
+		const levels = await ctx.db
+			.query("levels")
+			.withIndex("by_app_order", (q) => q.eq("appId", appId))
+			.filter((q) =>
+				q.and(
+					q.eq(q.field("isActive"), true),
+					q.eq(q.field("isDevOnly"), true),
+				),
+			)
+			.collect();
+
+		return levels.map((level) => toPublicLevel(level));
 	},
 });
 
@@ -789,7 +813,9 @@ export const getAllLevels = query({
 
 		const levels = await query.take(limit || 100);
 
-		return levels.map(toPublicLevel);
+		return levels
+			.filter((level) => level.isDevOnly !== true)
+			.map(toPublicLevel);
 	},
 });
 

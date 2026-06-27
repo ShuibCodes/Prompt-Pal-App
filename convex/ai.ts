@@ -1,7 +1,13 @@
 import { action } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { APICallError, generateText as aiGenerateText, RetryError } from "ai";
+import { createFal } from "@ai-sdk/fal";
+import {
+	APICallError,
+	experimental_generateImage as aiGenerateImage,
+	generateText as aiGenerateText,
+	RetryError,
+} from "ai";
 import { internal } from "./_generated/api";
 import type { AppAIErrorData } from "../src/lib/aiErrors";
 import { CodeScoringService } from "../src/lib/scoring/codeScoring";
@@ -33,6 +39,12 @@ if (!GEMINI_API_KEY) {
 const google = createGoogleGenerativeAI({
 	apiKey: GEMINI_API_KEY,
 });
+
+// Image generation runs on fal.ai (FLUX schnell) — far faster than the Gemini
+// image model for the generate→compare→score loop. Falls back to the FAL_KEY /
+// FAL_API_KEY env var if no apiKey is provided.
+const fal = createFal({ apiKey: process.env.FAL_KEY });
+const FAL_IMAGE_MODEL = "fal-ai/flux/schnell";
 
 type QuotaResult = {
 	allowed: boolean;
@@ -99,6 +111,9 @@ type ImageEvaluation = {
 	feedback: string[];
 	keywordsMatched: string[];
 	criteria: ImageEvaluationCriterion[];
+	// Per-aspect breakdown aligned 1:1 with the level's checklistItems, so the
+	// result screen can show exactly which aspects were covered (✓) or missed (✗).
+	checklist: { name: string; covered: boolean }[];
 };
 
 function getErrorMessage(error: unknown): string {
@@ -208,6 +223,7 @@ function defaultImageEvaluation(message: string): ImageEvaluation {
 		feedback: [message],
 		keywordsMatched: [],
 		criteria: [],
+		checklist: [],
 	};
 }
 
@@ -254,6 +270,8 @@ function normalizeImageEvaluation(raw: unknown): ImageEvaluation {
 				)
 			: [],
 		criteria,
+		// Aligned in the action handler against the level's checklistItems.
+		checklist: [],
 	};
 }
 
@@ -354,6 +372,12 @@ async function generateTextWithQuota(
 			prompt: args.prompt,
 			system: systemPrompt,
 			maxRetries: 0,
+			// Grading is a constrained rubric/JSON task — disable Gemini 2.5's
+			// default "thinking" pass (the main latency cost) and cap output.
+			maxOutputTokens: 700,
+			providerOptions: {
+				google: { thinkingConfig: { thinkingBudget: 0 } },
+			},
 		});
 		const durationMs = Date.now() - startedAt;
 
@@ -1381,19 +1405,12 @@ export const generateImage = action({
 		let result;
 
 		try {
-			result = await aiGenerateText({
-				model: google("gemini-2.5-flash-image"),
+			result = await aiGenerateImage({
+				model: fal.image(FAL_IMAGE_MODEL),
 				prompt: args.prompt,
+				// Square output matches the challenge comparison cards.
+				aspectRatio: "1:1",
 				maxRetries: 0,
-				// Gemini image models only return image bytes when IMAGE output is
-				// explicitly requested. Without this the call succeeds (HTTP 200) but
-				// result.files is empty → "No image generated". Required for the
-				// generate→compare→score image-challenge loop to work.
-				providerOptions: {
-					google: {
-						responseModalities: ["IMAGE"],
-					},
-				},
 			});
 		} catch (error) {
 			const durationMs = Date.now() - startedAt;
@@ -1408,7 +1425,7 @@ export const generateImage = action({
 				appId: args.appId,
 				requestId,
 				type: "image",
-				model: "gemini-2.5-flash-image",
+				model: FAL_IMAGE_MODEL,
 				promptLength: args.prompt.length,
 				durationMs,
 				errorMessage: getErrorMessage(error),
@@ -1419,10 +1436,8 @@ export const generateImage = action({
 
 		const durationMs = Date.now() - startedAt;
 
-		// Extract image from result.files
-		const imageFile = result.files?.find((file) =>
-			file.mediaType?.startsWith("image/"),
-		);
+		// experimental_generateImage returns the first image directly.
+		const imageFile = result.image;
 		if (!imageFile) {
 			throw new Error("No image generated");
 		}
@@ -1442,7 +1457,7 @@ export const generateImage = action({
 			appId: args.appId,
 			storageId: imageId,
 			prompt: args.prompt,
-			model: "gemini-2.5-flash-image",
+			model: FAL_IMAGE_MODEL,
 			requestId,
 			mimeType: imageFile.mediaType || "image/png",
 			size: imageBlob.size,
@@ -1456,7 +1471,7 @@ export const generateImage = action({
 			appId: args.appId,
 			requestId,
 			type: "image",
-			model: "gemini-2.5-flash-image",
+			model: FAL_IMAGE_MODEL,
 			promptLength: args.prompt.length,
 			durationMs,
 			success: true,
@@ -1560,6 +1575,25 @@ export const evaluateImage = action({
 			? candidateTargetUrl
 			: null;
 
+		// Per-aspect checklist for the result screen. Asking the judge to mark each
+		// authored aspect covered/missed (in this exact order) gives the learner a
+		// concrete "what to add next" breakdown after a fail.
+		const checklistLabels = (level?.checklistItems ?? []).filter(
+			(item): item is string =>
+				typeof item === "string" && item.trim().length > 0,
+		);
+		const checklistInstruction = checklistLabels.length
+			? `\n\nAlso check each of these aspects of the TARGET. Mark "covered": true only if the learner's result clearly shows it:\n${checklistLabels.map((label) => `- ${label}`).join("\n")}`
+			: "";
+		const checklistJsonField = checklistLabels.length
+			? `,\n  "checklist": [${checklistLabels
+					.map(
+						(label) =>
+							`{"name": ${JSON.stringify(label)}, "covered": <true|false>}`,
+					)
+					.join(", ")}]`
+			: "";
+
 		const evaluationPrompt = `You are grading an AI image-generation learning challenge. The learner was shown a TARGET reference image and asked to recreate it by writing a single image-generation prompt.
 
 TARGET — what the reference image shows:
@@ -1570,7 +1604,7 @@ ${args.userPrompt ? `The learner's prompt was: "${args.userPrompt}"` : ""}
 
 ${targetImageUrl ? "The FIRST image is the TARGET reference. The SECOND image is the LEARNER'S generated result." : "The attached image is the LEARNER'S generated result. Judge it against the TARGET description above."}
 
-Evaluate how closely the learner's result matches the target. Be fair and encouraging, but honest.
+Evaluate how closely the learner's result matches the target. Be fair and encouraging, but honest.${checklistInstruction}
 
 Respond with ONLY a JSON object (no markdown, no prose) in exactly this shape:
 {
@@ -1580,7 +1614,7 @@ Respond with ONLY a JSON object (no markdown, no prose) in exactly this shape:
   "styleScore": <0-100 how well the style matches>,
   "feedback": ["2-3 short, specific, encouraging sentences"],
   "keywordsMatched": ["the key elements clearly visible in the result"],
-  "criteria": [{"name": "Subject", "score": <0-100>, "feedback": "..."}]
+  "criteria": [{"name": "Subject", "score": <0-100>, "feedback": "..."}]${checklistJsonField}
 }`;
 
 		// Generate evaluation using AI
@@ -1590,7 +1624,7 @@ Respond with ONLY a JSON object (no markdown, no prose) in exactly this shape:
 
 		try {
 			result = await aiGenerateText({
-				model: google("gemini-2.5-flash"),
+				model: google("gemini-2.5-flash-lite"),
 				messages: [
 					{
 						role: "user",
@@ -1618,7 +1652,7 @@ Respond with ONLY a JSON object (no markdown, no prose) in exactly this shape:
 				appId: "prompt-pal",
 				requestId,
 				type: "evaluate",
-				model: "gemini-2.5-flash",
+				model: "gemini-2.5-flash-lite",
 				promptLength: evaluationPrompt.length,
 				durationMs,
 				errorMessage: getErrorMessage(error),
@@ -1631,13 +1665,39 @@ Respond with ONLY a JSON object (no markdown, no prose) in exactly this shape:
 
 		// Parse the AI response as JSON
 		let evaluation: ImageEvaluation;
+		let parsedRaw: Record<string, unknown> = {};
 		try {
-			evaluation = normalizeImageEvaluation(
-				JSON.parse(extractJsonText(result.text)),
-			);
+			parsedRaw = JSON.parse(
+				extractJsonText(result.text),
+			) as Record<string, unknown>;
+			evaluation = normalizeImageEvaluation(parsedRaw);
 		} catch {
 			evaluation = defaultImageEvaluation("Unable to parse AI evaluation response.");
 		}
+
+		// Align the judge's per-aspect verdict 1:1 with the authored checklist
+		// labels (match by name, else by position) so the result screen shows a
+		// trustworthy ✓/✗ for each aspect even if the model reorders them.
+		const rawChecklist = Array.isArray(parsedRaw.checklist)
+			? (parsedRaw.checklist as unknown[])
+			: [];
+		const checklist = checklistLabels.map((label, index) => {
+			const byName = rawChecklist.find(
+				(item): item is Record<string, unknown> =>
+					Boolean(item) &&
+					typeof item === "object" &&
+					typeof (item as Record<string, unknown>).name === "string" &&
+					((item as Record<string, unknown>).name as string).trim().toLowerCase() ===
+						label.trim().toLowerCase(),
+			);
+			const positional = rawChecklist[index];
+			const source =
+				byName ??
+				(positional && typeof positional === "object"
+					? (positional as Record<string, unknown>)
+					: undefined);
+			return { name: label, covered: source ? Boolean(source.covered) : false };
+		});
 
 		const finalScore = clampScore(
 			evaluation.score * 0.8 + promptAssessment.score * 0.2,
@@ -1646,6 +1706,7 @@ Respond with ONLY a JSON object (no markdown, no prose) in exactly this shape:
 			...evaluation,
 			score: finalScore,
 			promptQualityScore: promptAssessment.score,
+			checklist,
 			feedback: dedupeFeedback([
 				...promptAssessment.feedback,
 				...evaluation.feedback,
@@ -1661,7 +1722,7 @@ Respond with ONLY a JSON object (no markdown, no prose) in exactly this shape:
 			appId: "prompt-pal",
 			requestId,
 			type: "evaluate",
-			model: "gemini-2.5-flash",
+			model: "gemini-2.5-flash-lite",
 			promptLength: evaluationPrompt.length,
 			responseLength: result.text.length,
 			tokensUsed: result.usage?.totalTokens,

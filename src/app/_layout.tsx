@@ -1,5 +1,25 @@
 import "./global.css";
+import { LogBox } from "react-native";
 import { BootModeScreen } from "../lib/BootModeScreen";
+
+// Silence a single benign deprecation warning emitted by a third-party
+// dependency (not our code) that still renders React Native's built-in
+// SafeAreaView. Scoped to this exact message so nothing else is hidden.
+// LogBox handles the on-device overlay; the console.warn filter clears it from
+// the Metro terminal too, since LogBox doesn't touch terminal output.
+const IGNORED_WARNINGS = ["SafeAreaView has been deprecated"];
+LogBox.ignoreLogs(IGNORED_WARNINGS);
+const originalConsoleWarn = console.warn.bind(console);
+console.warn = (...args: unknown[]) => {
+	const first = args[0];
+	if (
+		typeof first === "string" &&
+		IGNORED_WARNINGS.some((message) => first.includes(message))
+	) {
+		return;
+	}
+	originalConsoleWarn(...args);
+};
 
 const SAFE_MODE = process.env.EXPO_PUBLIC_SAFE_MODE === "1";
 

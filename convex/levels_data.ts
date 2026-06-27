@@ -66,14 +66,14 @@ const imageLessonScaffolds: Record<
 };
 
 const imageLevelsBase = [
-	// EASY LEVELS (1-3): one clear subject, simple. passingScore 70, 3-4 broad keywords.
+	// EASY LEVELS (1-3): one clear subject, simple. passingScore 50, 3-4 broad keywords.
 	{
 		id: "image-1-easy",
 		type: "image" as const,
 		title: "Color Match",
 		description: "Recreate a single flat, solid colour that fills the whole frame.",
 		difficulty: "beginner" as const,
-		passingScore: 70,
+		passingScore: 50,
 		unlocked: true,
 		order: 1,
 		hiddenPromptKeywords: ["solid colour", "green", "flat", "fills the frame"],
@@ -100,7 +100,7 @@ const imageLevelsBase = [
 		title: "Basic Shape",
 		description: "Generate a single simple 3D shape on a plain background.",
 		difficulty: "beginner" as const,
-		passingScore: 70,
+		passingScore: 50,
 		unlocked: true,
 		order: 2,
 		hiddenPromptKeywords: ["sphere", "grey", "plain background", "soft shadow"],
@@ -127,7 +127,7 @@ const imageLevelsBase = [
 		title: "Everyday Object",
 		description: "Recreate a single real-world object as a clean product shot.",
 		difficulty: "beginner" as const,
-		passingScore: 70,
+		passingScore: 50,
 		unlocked: true,
 		order: 3,
 		hiddenPromptKeywords: [
@@ -154,14 +154,14 @@ const imageLevelsBase = [
 		],
 	},
 
-	// MEDIUM LEVELS (4-7): scene + style + composition. passingScore 75, 5-7 keywords.
+	// MEDIUM LEVELS (4-7): scene + style + composition. passingScore 58, 5-7 keywords.
 	{
 		id: "image-4-medium",
 		type: "image" as const,
 		title: "Architecture in Snow",
 		description: "Compose a modern building within a dramatic natural setting.",
 		difficulty: "intermediate" as const,
-		passingScore: 75,
+		passingScore: 58,
 		unlocked: false,
 		order: 4,
 		hiddenPromptKeywords: [
@@ -195,7 +195,7 @@ const imageLevelsBase = [
 		title: "Landscape at Dusk",
 		description: "Capture a wide landscape with a specific time of day and mood.",
 		difficulty: "intermediate" as const,
-		passingScore: 75,
+		passingScore: 58,
 		unlocked: false,
 		order: 5,
 		hiddenPromptKeywords: [
@@ -229,7 +229,7 @@ const imageLevelsBase = [
 		title: "Food & Drink",
 		description: "Style an appetizing commercial beverage shot.",
 		difficulty: "intermediate" as const,
-		passingScore: 75,
+		passingScore: 58,
 		unlocked: false,
 		order: 6,
 		hiddenPromptKeywords: [
@@ -264,7 +264,7 @@ const imageLevelsBase = [
 		title: "Abstract Composition",
 		description: "Create a non-representational image from a colour palette and shapes.",
 		difficulty: "intermediate" as const,
-		passingScore: 75,
+		passingScore: 58,
 		unlocked: false,
 		order: 7,
 		hiddenPromptKeywords: [
@@ -294,14 +294,14 @@ const imageLevelsBase = [
 		],
 	},
 
-	// HARD LEVELS (8-10): style + lighting + composition + constraints. passingScore 80, 8-10 keywords.
+	// HARD LEVELS (8-10): style + lighting + composition + constraints. passingScore 68, 8-10 keywords.
 	{
 		id: "image-8-hard",
 		type: "image" as const,
 		title: "Technical Blueprint",
 		description: "Produce a precise, monochrome engineering-style illustration.",
 		difficulty: "advanced" as const,
-		passingScore: 80,
+		passingScore: 68,
 		unlocked: false,
 		order: 8,
 		hiddenPromptKeywords: [
@@ -339,7 +339,7 @@ const imageLevelsBase = [
 		title: "Surreal Scene",
 		description: "Compose a moody, multi-element surreal scene with deliberate lighting.",
 		difficulty: "advanced" as const,
-		passingScore: 80,
+		passingScore: 68,
 		unlocked: false,
 		order: 9,
 		hiddenPromptKeywords: [
@@ -377,7 +377,7 @@ const imageLevelsBase = [
 		title: "Product Hero Shot",
 		description: "Direct a dramatic, high-end commercial product image.",
 		difficulty: "advanced" as const,
-		passingScore: 80,
+		passingScore: 68,
 		unlocked: false,
 		order: 10,
 		hiddenPromptKeywords: [
@@ -442,11 +442,11 @@ function mapCodingLessonToLevel(
 				? "intermediate"
 				: "advanced";
 	// Tiered passing scores: the bar rises with difficulty (progression, not flat).
-	// Tier-scaled bar: easy is generous (momentum-first — a genuine attempt passes),
-	// the bar rises with difficulty. Pairs with the holistic judge + the
-	// all-required gate that only applies on the advanced tier.
+	// Easy sits at 50 so a pass feels earned (a half-decent description) rather
+	// than rubber-stamping a marginal attempt, then climbs with difficulty. Pairs
+	// with the holistic judge + the all-required gate that only applies on advanced.
 	const passingScore =
-		difficulty === "beginner" ? 35 : difficulty === "intermediate" ? 55 : 70;
+		difficulty === "beginner" ? 50 : difficulty === "intermediate" ? 55 : 70;
 	// Coding scaffold fade: easy = fill-in-the-blank template; medium/hard/boss =
 	// empty box (no checklist tier). The visual target carries the brief.
 	const scaffoldType: "template" | "none" =
@@ -485,6 +485,8 @@ function mapCodingLessonToLevel(
 		checklistItems,
 		promptChecklist: checklistItems,
 		lessonMode,
+		introPromise: "introPromise" in lesson ? lesson.introPromise : undefined,
+		introSecret: "introSecret" in lesson ? lesson.introSecret : undefined,
 	};
 }
 
@@ -556,11 +558,11 @@ function mapAgentLessonToLevel(
 				? "intermediate"
 				: "advanced";
 	// Tiered passing scores: the bar rises with difficulty (progression, not flat).
-	// Tier-scaled bar: easy is generous (momentum-first — a genuine attempt passes),
-	// the bar rises with difficulty. Pairs with the holistic judge + the
-	// all-required gate that only applies on the advanced tier.
+	// Easy sits at 50 so a pass feels earned (a half-decent description) rather
+	// than rubber-stamping a marginal attempt, then climbs with difficulty. Pairs
+	// with the holistic judge + the all-required gate that only applies on advanced.
 	const passingScore =
-		difficulty === "beginner" ? 35 : difficulty === "intermediate" ? 55 : 70;
+		difficulty === "beginner" ? 50 : difficulty === "intermediate" ? 55 : 70;
 	// Scaffolding fade: easy + medium use a template (easy locks it into
 	// fill-in-the-blank slots; medium shows it as a guidance card above a free
 	// box), advanced is an empty box (pure free text).
@@ -611,3 +613,9 @@ export const agentLevels = agentLessons.map(mapAgentLessonToLevel);
 // Their data + mappings remain in this file (imageLevels, copywritingLevels,
 // questLevelsData) so re-enabling a batch is just adding it back to this array.
 export const allLevels = [...agentLevels, ...codeLevels];
+
+/** Image challenges — seeded with isDevOnly for the in-app dev lab, not the quest path. */
+export const devOnlyLevels = imageLevels.map((level) => ({
+	...level,
+	unlocked: true,
+}));

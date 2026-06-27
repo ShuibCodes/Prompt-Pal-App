@@ -381,6 +381,8 @@ export default defineSchema({
 		passingScore: v.number(),
 		unlocked: v.boolean(),
 		isActive: v.boolean(),
+		// Dev-only levels (e.g. image lab) are seeded but hidden from the live quest path.
+		isDevOnly: v.optional(v.boolean()),
 		order: v.number(),
 
 		// Image challenge fields

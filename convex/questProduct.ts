@@ -1,28 +1,36 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { allLevels } from "./levels_data";
+import { allLevels, imageLevels } from "./levels_data";
 import {
 	buildDefaultQuestNodes,
 	buildFeaturedCourseOverview,
 	buildHomeHeaderStats,
 	buildLessonDefinitionsFromLegacyLevels,
+	buildMixedLessonDefinitions,
+	buildMixedQuestNodes,
 	DEFAULT_LEARNING_TRACKS,
 	DEFAULT_PERK_CATALOG,
 	buildProfileOverviewAchievements,
 	buildProfileOverviewUsageQuota,
 	getLevelFromLifetimeXp,
+	MIXED_TRACK_ID,
 	type LessonDefinitionSeed,
 	type QuestNodeSeed,
 	type TrackId,
 } from "./questProductData";
 
 const ONBOARDING_VERSION = "quest-first-v1";
-// Staged rollout: the agent batch ships first and is the only active track.
-const DEFAULT_TRACK_ID: TrackId = "agent";
+// Launch MVP: one combined coding + image path (no track switcher).
+const DEFAULT_TRACK_ID: TrackId = MIXED_TRACK_ID;
 
-const seedLessons = buildLessonDefinitionsFromLegacyLevels(allLevels);
+const seedLessons = buildLessonDefinitionsFromLegacyLevels([
+	...allLevels,
+	...imageLevels,
+]);
 const seedNodes = buildDefaultQuestNodes(seedLessons);
+const seedMixedLessons = buildMixedLessonDefinitions(seedLessons);
+const seedMixedNodes = buildMixedQuestNodes(seedLessons);
 
 async function getUserId(ctx: QueryCtx | MutationCtx) {
 	const identity = await ctx.auth.getUserIdentity();
@@ -35,6 +43,14 @@ async function requireUserId(ctx: QueryCtx | MutationCtx) {
 		throw new Error("Authentication required");
 	}
 	return userId;
+}
+
+function assertDevQuestToolsAllowed() {
+	if (process.env.ALLOW_DEV_QUEST_TOOLS !== "1") {
+		throw new Error(
+			"Dev quest tools are disabled. Run: npx convex env set ALLOW_DEV_QUEST_TOOLS 1",
+		);
+	}
 }
 
 function todayKey(now = Date.now()) {
@@ -54,19 +70,41 @@ function monthKey(year: number, month: number, day: number) {
 }
 
 function getSeedLesson(lessonId: string) {
-	return seedLessons.find((lesson) => lesson.id === lessonId) ?? null;
+	return (
+		seedMixedLessons.find((lesson) => lesson.id === lessonId) ??
+		seedLessons.find((lesson) => lesson.id === lessonId) ??
+		null
+	);
 }
 
 function getSeedNode(nodeId: string) {
-	return seedNodes.find((node) => node.id === nodeId) ?? null;
+	return (
+		seedMixedNodes.find((node) => node.id === nodeId) ??
+		seedNodes.find((node) => node.id === nodeId) ??
+		null
+	);
+}
+
+function getFirstSeedNodeForTrack(trackId: string) {
+	if (trackId === MIXED_TRACK_ID) {
+		return seedMixedNodes[0] ?? null;
+	}
+	return seedNodes.find((node) => node.trackId === trackId) ?? null;
 }
 
 function getTrack(trackId: string | undefined | null) {
+	const normalized =
+		trackId === MIXED_TRACK_ID ||
+		trackId === "coding" ||
+		trackId === "agent" ||
+		!trackId
+			? MIXED_TRACK_ID
+			: trackId;
 	return (
 		DEFAULT_LEARNING_TRACKS.find(
-			(track) => track.id === trackId && track.isActive,
+			(track) => track.id === normalized && track.isActive,
 		) ??
-		DEFAULT_LEARNING_TRACKS.find((track) => track.id === DEFAULT_TRACK_ID) ??
+		DEFAULT_LEARNING_TRACKS.find((track) => track.id === MIXED_TRACK_ID) ??
 		DEFAULT_LEARNING_TRACKS[0]
 	);
 }
@@ -98,25 +136,47 @@ async function getNode(ctx: QueryCtx | MutationCtx, nodeId: string) {
 }
 
 async function getTrackNodes(ctx: QueryCtx | MutationCtx, trackId: string) {
+	const resolvedTrackId =
+		trackId === MIXED_TRACK_ID ||
+		trackId === "coding" ||
+		trackId === "agent"
+			? MIXED_TRACK_ID
+			: trackId;
+	// Mixed path is intentionally source-controlled (launch curation), so always
+	// read it from seed definitions rather than stale DB snapshots.
+	if (resolvedTrackId === MIXED_TRACK_ID) {
+		return seedMixedNodes;
+	}
 	const dbNodes = await ctx.db
 		.query("questNodes")
-		.withIndex("by_track_order", (q) => q.eq("trackId", trackId))
+		.withIndex("by_track_order", (q) => q.eq("trackId", resolvedTrackId))
 		.collect();
 	if (dbNodes.length > 0) {
 		return dbNodes;
 	}
-	return seedNodes.filter((node) => node.trackId === trackId);
+	return seedNodes.filter((node) => node.trackId === resolvedTrackId);
 }
 
 async function getTrackLessons(ctx: QueryCtx | MutationCtx, trackId: string) {
+	const resolvedTrackId =
+		trackId === MIXED_TRACK_ID ||
+		trackId === "coding" ||
+		trackId === "agent"
+			? MIXED_TRACK_ID
+			: trackId;
+	// Mixed path is intentionally source-controlled (launch curation), so always
+	// read it from seed definitions rather than stale DB snapshots.
+	if (resolvedTrackId === MIXED_TRACK_ID) {
+		return seedMixedLessons;
+	}
 	const dbLessons = await ctx.db
 		.query("lessonDefinitions")
-		.withIndex("by_track_order", (q) => q.eq("trackId", trackId))
+		.withIndex("by_track_order", (q) => q.eq("trackId", resolvedTrackId))
 		.collect();
 	if (dbLessons.length > 0) {
 		return dbLessons;
 	}
-	return seedLessons.filter((lesson) => lesson.trackId === trackId);
+	return seedLessons.filter((lesson) => lesson.trackId === resolvedTrackId);
 }
 
 async function getStats(ctx: QueryCtx | MutationCtx, userId: string | null) {
@@ -258,9 +318,10 @@ async function getPathProgress(
 	trackId: string,
 ) {
 	if (!userId) {
-		const firstNode = seedNodes.find((node) => node.trackId === trackId);
+		const firstNode = getFirstSeedNodeForTrack(trackId);
 		return {
-			trackId,
+			trackId:
+				trackId === "coding" || trackId === "agent" ? MIXED_TRACK_ID : trackId,
 			currentNodeOrder: 1,
 			highestUnlockedNodeOrder: 1,
 			activeNodeId: firstNode?.id ?? "",
@@ -269,19 +330,21 @@ async function getPathProgress(
 		};
 	}
 
+	const resolvedTrackId =
+		trackId === "coding" || trackId === "agent" ? MIXED_TRACK_ID : trackId;
 	const progress = await ctx.db
 		.query("userQuestPathProgress")
 		.withIndex("by_user_track", (q) =>
-			q.eq("userId", userId).eq("trackId", trackId),
+			q.eq("userId", userId).eq("trackId", resolvedTrackId),
 		)
 		.first();
 	if (progress) {
 		return progress;
 	}
 
-	const firstNode = seedNodes.find((node) => node.trackId === trackId);
+	const firstNode = getFirstSeedNodeForTrack(resolvedTrackId);
 	return {
-		trackId,
+		trackId: resolvedTrackId,
 		currentNodeOrder: 1,
 		highestUnlockedNodeOrder: 1,
 		activeNodeId: firstNode?.id ?? "",
@@ -764,39 +827,146 @@ export const claimQuestRewards = mutation({
 	args: { runId: v.id("questRuns") },
 	handler: async (ctx, args) => {
 		const userId = await requireUserId(ctx);
+		return await claimQuestRewardsInternal(ctx, userId, args.runId);
+	},
+});
+
+async function claimQuestRewardsInternal(
+	ctx: MutationCtx,
+	userId: string,
+	runId: Id<"questRuns">,
+) {
+	const run = await ctx.db.get(runId);
+	if (!run || run.userId !== userId) {
+		throw new Error("Quest run not found");
+	}
+	if (run.rewardClaimed) {
+		return { rewardXp: 0, alreadyClaimed: true };
+	}
+	if ((run.finalScore ?? 0) <= 0) {
+		throw new Error("Submit a passing attempt before claiming rewards");
+	}
+	const now = Date.now();
+	const stats = await getOrCreateStats(ctx, userId);
+	const lifetimeXp = (stats?.lifetimeXp ?? stats?.totalXp ?? 0) + run.rewardXp;
+	const walletXp = (stats?.walletXp ?? stats?.points ?? 0) + run.rewardXp;
+	if (stats) {
+		await ctx.db.patch(stats._id, {
+			totalXp: lifetimeXp,
+			lifetimeXp,
+			walletXp,
+			currentLevel: getLevelFromLifetimeXp(lifetimeXp),
+			points: walletXp,
+			updatedAt: now,
+		});
+	}
+	await ctx.db.patch(runId, {
+		status: "completed",
+		completedAt: now,
+		rewardClaimed: true,
+		updatedAt: now,
+	});
+	await upsertDailyActivity(ctx, userId, run.rewardXp, (run.finalScore ?? 0) >= 90);
+	await unlockNextQuestNodeInternal(ctx, userId, run.trackId, run.nodeId);
+	return { rewardXp: run.rewardXp, lifetimeXp, walletXp };
+}
+
+/** Dev-only: mark a quest run as passed and optionally advance the path. */
+export const devSkipQuestRun = mutation({
+	args: {
+		runId: v.id("questRuns"),
+		advancePath: v.optional(v.boolean()),
+	},
+	handler: async (ctx, args) => {
+		assertDevQuestToolsAllowed();
+		const userId = await requireUserId(ctx);
 		const run = await ctx.db.get(args.runId);
 		if (!run || run.userId !== userId) {
 			throw new Error("Quest run not found");
 		}
-		if (run.rewardClaimed) {
-			return { rewardXp: 0, alreadyClaimed: true };
-		}
-		if ((run.finalScore ?? 0) <= 0) {
-			throw new Error("Submit a passing attempt before claiming rewards");
-		}
+
 		const now = Date.now();
-		const stats = await getOrCreateStats(ctx, userId);
-		const lifetimeXp = (stats?.lifetimeXp ?? stats?.totalXp ?? 0) + run.rewardXp;
-		const walletXp = (stats?.walletXp ?? stats?.points ?? 0) + run.rewardXp;
-		if (stats) {
-			await ctx.db.patch(stats._id, {
-				totalXp: lifetimeXp,
-				lifetimeXp,
-				walletXp,
-				currentLevel: getLevelFromLifetimeXp(lifetimeXp),
-				points: walletXp,
+		const shouldAdvance = args.advancePath !== false;
+
+		if (!run.rewardClaimed) {
+			await ctx.db.patch(args.runId, {
+				status: "submitted",
+				submittedAt: now,
+				finalScore: 100,
+				attemptCount: run.attemptCount + 1,
+				heartsRemaining: run.heartsRemaining,
+				timeSpentMs: now - run.startedAt,
+				resultSummary: {
+					score: 100,
+					passed: true,
+					feedback: ["Dev skip"],
+					matchedCriteria: [],
+				},
 				updatedAt: now,
 			});
 		}
-		await ctx.db.patch(args.runId, {
-			status: "completed",
-			completedAt: now,
-			rewardClaimed: true,
+
+		if (!shouldAdvance) {
+			return { advanced: false, rewardXp: 0 };
+		}
+
+		return {
+			advanced: true,
+			...(await claimQuestRewardsInternal(ctx, userId, args.runId)),
+		};
+	},
+});
+
+/** Dev-only: unlock every node on the mixed path for free navigation. */
+export const devUnlockAllQuestNodes = mutation({
+	args: { trackId: v.optional(v.string()) },
+	handler: async (ctx, args) => {
+		assertDevQuestToolsAllowed();
+		const userId = await requireUserId(ctx);
+		const trackId = getTrack(args.trackId ?? DEFAULT_TRACK_ID).id;
+		const nodes = await getTrackNodes(ctx, trackId);
+		if (nodes.length === 0) {
+			throw new Error("No quest nodes found for track");
+		}
+
+		const lastNode = nodes[nodes.length - 1];
+		const now = Date.now();
+		const progress = await ctx.db
+			.query("userQuestPathProgress")
+			.withIndex("by_user_track", (q) =>
+				q.eq("userId", userId).eq("trackId", trackId),
+			)
+			.first();
+
+		if (progress) {
+			await ctx.db.patch(progress._id, {
+				highestUnlockedNodeOrder: lastNode.pathOrder,
+				updatedAt: now,
+			});
+			return {
+				trackId,
+				highestUnlockedNodeOrder: lastNode.pathOrder,
+				nodeCount: nodes.length,
+			};
+		}
+
+		await ctx.db.insert("userQuestPathProgress", {
+			userId,
+			trackId,
+			currentNodeOrder: 1,
+			highestUnlockedNodeOrder: lastNode.pathOrder,
+			activeNodeId: nodes[0]?.id ?? "",
+			completedNodeIds: [],
+			masteredNodeIds: [],
+			createdAt: now,
 			updatedAt: now,
 		});
-		await upsertDailyActivity(ctx, userId, run.rewardXp, (run.finalScore ?? 0) >= 90);
-		await unlockNextQuestNodeInternal(ctx, userId, run.trackId, run.nodeId);
-		return { rewardXp: run.rewardXp, lifetimeXp, walletXp };
+
+		return {
+			trackId,
+			highestUnlockedNodeOrder: lastNode.pathOrder,
+			nodeCount: nodes.length,
+		};
 	},
 });
 

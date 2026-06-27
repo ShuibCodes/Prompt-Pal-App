@@ -7,11 +7,15 @@ import {
 	buildFeaturedCourseOverview,
 	buildHomeHeaderStats,
 	buildLessonDefinitionsFromLegacyLevels,
+	buildMixedLessonDefinitions,
+	buildMixedQuestNodes,
+	LAUNCH_CODING_OPENING_LESSON_IDS,
 	buildProfileOverviewAchievements,
 	buildProfileOverviewUsageQuota,
 	DEFAULT_LEARNING_TRACKS,
 	DEFAULT_PERK_CATALOG,
 	getLevelFromLifetimeXp,
+	MIXED_TRACK_ID,
 } from "../convex/questProductData";
 import { allLevels as levelsData } from "../convex/levels_data";
 
@@ -66,14 +70,37 @@ describe("quest product domain data", () => {
 		});
 	});
 
-	it("exposes the active learning tracks (coding, agent) in sort order", () => {
+	it("builds the MVP mixed path with coding opener then agent + coding tail", () => {
+		const lessons = buildLessonDefinitionsFromLegacyLevels(levelsData);
+		const mixedLessons = buildMixedLessonDefinitions(lessons);
+		const mixedNodes = buildMixedQuestNodes(lessons);
+
+		expect(mixedLessons[0]?.id).toBe("code-1-easy");
+		expect(
+			mixedLessons.slice(0, LAUNCH_CODING_OPENING_LESSON_IDS.length).map((lesson) => lesson.id),
+		).toEqual([...LAUNCH_CODING_OPENING_LESSON_IDS]);
+		expect(
+			mixedLessons
+				.slice(0, LAUNCH_CODING_OPENING_LESSON_IDS.length)
+				.every((lesson) => lesson.lessonType === "code"),
+		).toBe(true);
+		expect(mixedLessons.every((lesson: any) => lesson.trackId === MIXED_TRACK_ID)).toBe(
+			true,
+		);
+		expect(mixedNodes.some((node) => node.lessonId.startsWith("agent-"))).toBe(true);
+		expect(mixedNodes.some((node) => node.lessonId.startsWith("code-"))).toBe(true);
+		expect(mixedNodes.every((node) => node.trackId === MIXED_TRACK_ID)).toBe(true);
+		expect(mixedNodes[0]?.pathOrder).toBe(1);
+		expect(mixedNodes[mixedNodes.length - 1]?.pathOrder).toBe(mixedNodes.length);
+		expect(mixedLessons.length).toBe(36);
+	});
+
+	it("exposes only the mixed launch track as active", () => {
 		const activeTracks = [...DEFAULT_LEARNING_TRACKS]
 			.filter((track) => track.isActive)
 			.sort((a, b) => a.sortOrder - b.sortOrder);
 
-		expect(activeTracks.map((track) => track.id)).toEqual(["coding", "agent"]);
-		// The selector filters by isActive, so it can still hide a track without
-		// deleting its lesson content.
+		expect(activeTracks.map((track) => track.id)).toEqual([MIXED_TRACK_ID]);
 		expect(activeTracks.every((track) => track.isActive)).toBe(true);
 	});
 

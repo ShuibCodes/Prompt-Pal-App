@@ -258,6 +258,18 @@ function AppInitializer() {
 						name="delete-account"
 						options={{ animation: "slide_from_right" }}
 					/>
+					<Stack.Screen
+						name="onboarding-preview"
+						options={{ animation: "slide_from_right" }}
+					/>
+					<Stack.Screen
+						name="challenge-preview"
+						options={{ animation: "slide_from_right" }}
+					/>
+					<Stack.Screen
+						name="dev/intro-lab"
+						options={{ animation: "slide_from_right" }}
+					/>
 				</Stack>
 				<StatusBar style="light" />
 			</ErrorBoundary>

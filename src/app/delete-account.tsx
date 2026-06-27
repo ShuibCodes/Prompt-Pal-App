@@ -68,7 +68,7 @@ export default function DeleteAccountScreen() {
 	const [error, setError] = useState<string | null>(null);
 
 	const confirmed = confirmText.trim().toUpperCase() === CONFIRM_WORD;
-	const canDelete = confirmed && isLoaded && !isDeleting;
+	const canDelete = confirmed && !isDeleting;
 
 	const handleCancel = useCallback(() => {
 		if (isDeleting) {
@@ -175,9 +175,11 @@ export default function DeleteAccountScreen() {
 
 				<KeyboardAvoidingView
 					style={styles.flex}
-					behavior={Platform.OS === "ios" ? "padding" : undefined}
+					behavior={Platform.OS === "ios" ? "padding" : "height"}
+					keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
 				>
 					<ScrollView
+						style={styles.flex}
 						contentContainerStyle={styles.scrollContent}
 						showsVerticalScrollIndicator={false}
 						keyboardShouldPersistTaps="handled"
@@ -228,6 +230,11 @@ export default function DeleteAccountScreen() {
 									setError(null);
 								}
 							}}
+							onSubmitEditing={() => {
+								if (canDelete) {
+									void handleDelete();
+								}
+							}}
 							editable={!isDeleting}
 							placeholder={CONFIRM_WORD}
 							placeholderTextColor="#BDBDBD"
@@ -238,7 +245,9 @@ export default function DeleteAccountScreen() {
 							style={[styles.input, confirmed && styles.inputConfirmed]}
 							accessibilityLabel={`Type ${CONFIRM_WORD} to confirm account deletion`}
 						/>
+					</ScrollView>
 
+					<View style={styles.footer}>
 						{error ? <Text style={styles.errorText}>{error}</Text> : null}
 
 						<Pressable
@@ -247,15 +256,27 @@ export default function DeleteAccountScreen() {
 							style={({ pressed }) => [
 								styles.deleteButton,
 								!canDelete && styles.deleteButtonDisabled,
+								canDelete && styles.deleteButtonEnabled,
 								pressed && canDelete && styles.deleteButtonPressed,
 							]}
 							accessibilityRole="button"
 							accessibilityLabel="Permanently delete account"
 							accessibilityState={{ disabled: !canDelete }}
 						>
-							<Text style={styles.deleteButtonText}>
-								Permanently Delete Account
-							</Text>
+							{isDeleting ? (
+								<ActivityIndicator color="#FFFFFF" />
+							) : (
+								<Text
+									style={[
+										styles.deleteButtonText,
+										!canDelete && styles.deleteButtonTextDisabled,
+									]}
+								>
+									{confirmed
+										? "Permanently Delete Account"
+										: `Type ${CONFIRM_WORD} to enable`}
+								</Text>
+							)}
 						</Pressable>
 
 						<Pressable
@@ -270,7 +291,7 @@ export default function DeleteAccountScreen() {
 						>
 							<Text style={styles.cancelButtonText}>Cancel</Text>
 						</Pressable>
-					</ScrollView>
+					</View>
 				</KeyboardAvoidingView>
 			</SafeAreaView>
 
@@ -322,8 +343,16 @@ const styles = StyleSheet.create({
 	scrollContent: {
 		paddingHorizontal: 24,
 		paddingTop: 16,
-		paddingBottom: 40,
+		paddingBottom: 24,
 		alignItems: "center",
+	},
+	footer: {
+		paddingHorizontal: 24,
+		paddingTop: 12,
+		paddingBottom: 8,
+		borderTopWidth: 1,
+		borderTopColor: "#F0F0F0",
+		backgroundColor: "#FFFFFF",
 	},
 	warningCircle: {
 		width: 84,
@@ -424,8 +453,8 @@ const styles = StyleSheet.create({
 		borderColor: "#FF4B4B",
 	},
 	errorText: {
-		alignSelf: "flex-start",
-		marginTop: 12,
+		width: "100%",
+		marginBottom: 12,
 		fontSize: 13,
 		lineHeight: 19,
 		color: "#FF4B4B",
@@ -435,11 +464,12 @@ const styles = StyleSheet.create({
 		width: "100%",
 		height: 54,
 		borderRadius: 16,
-		backgroundColor: "#FF4B4B",
 		alignItems: "center",
 		justifyContent: "center",
-		marginTop: 24,
 		borderBottomWidth: 4,
+	},
+	deleteButtonEnabled: {
+		backgroundColor: "#FF4B4B",
 		borderBottomColor: "#D63333",
 	},
 	deleteButtonPressed: {
@@ -447,8 +477,10 @@ const styles = StyleSheet.create({
 		borderBottomWidth: 2,
 	},
 	deleteButtonDisabled: {
-		backgroundColor: "#F0A9A9",
-		borderBottomColor: "#E29B9B",
+		backgroundColor: "#F7F7F7",
+		borderBottomColor: "#E5E5E5",
+		borderWidth: 2,
+		borderColor: "#E5E5E5",
 	},
 	deleteButtonText: {
 		color: "#FFFFFF",
@@ -456,6 +488,9 @@ const styles = StyleSheet.create({
 		fontWeight: "900",
 		textTransform: "uppercase",
 		letterSpacing: 0.5,
+	},
+	deleteButtonTextDisabled: {
+		color: "#AFAFAF",
 	},
 	cancelButton: {
 		width: "100%",

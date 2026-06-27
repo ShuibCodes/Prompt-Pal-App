@@ -1384,6 +1384,7 @@ export const createLevel = internalMutation({
 		passingScore: v.number(),
 		unlocked: v.boolean(),
 		isActive: v.boolean(),
+		isDevOnly: v.optional(v.boolean()),
 		order: v.number(),
 		// Image level fields
 		targetImageUrl: v.optional(v.string()),
@@ -1494,6 +1495,7 @@ export const updateLevel = internalMutation({
 		passingScore: v.optional(v.number()),
 		unlocked: v.optional(v.boolean()),
 		isActive: v.optional(v.boolean()),
+		isDevOnly: v.optional(v.boolean()),
 		order: v.optional(v.number()),
 		// Image level fields
 		targetImageUrl: v.optional(v.string()),

@@ -48,34 +48,36 @@ const codingLessonScaffolds: Record<
 		checklistItems?: string[];
 	}
 > = {
+	// Gap templates frame the prompt so each blank asks the learner to LOOK at
+	// the target screenshot and DESCRIBE a decision about it (what kind of screen,
+	// how it should feel, what it contains) — never to transcribe text that's
+	// visible on the target. Labels stay short (2-4 words). The Gemini evaluator
+	// scores the assembled prompt against the target, so any reasonable
+	// description can pass; there are no hardcoded answers.
 	[CODE_IDS[0]]: {
 		scaffoldTemplate:
-			"Build a hero section with a [headline], [supporting text], and a [button label]",
-		checklistItems: ["Headline", "Supporting text", "Button label"],
+			"Create a [type of page] that feels [mood or style] and includes [what's on it]",
+		checklistItems: ["type of page", "mood or style", "what's on it"],
 	},
 	[CODE_IDS[1]]: {
 		scaffoldTemplate:
-			"Build a navigation bar using [tech stack] with [number] links and a [style direction] look",
-		checklistItems: ["Tech stack", "Navigation links", "Visual style"],
+			"Create a [menu type] that feels [visual style] using the styling tool already on the page, and includes [what's in it]",
+		checklistItems: ["menu type", "visual style", "what's in it"],
 	},
 	[CODE_IDS[2]]: {
 		scaffoldTemplate:
-			"Add a contact form below the heading with [fields] and a [submit button], and leave the [existing element] unchanged",
-		checklistItems: [
-			"Requested fields",
-			"Submit button",
-			"Leave existing heading unchanged",
-		],
+			"Below the heading, add a [form type] that includes [what's in it] — don't change anything else",
+		checklistItems: ["form type", "what's in it"],
 	},
 	[CODE_IDS[3]]: {
 		scaffoldTemplate:
-			"When the Sign Up button is clicked, show a [user outcome] with [key detail] and keep the experience [tone]",
-		checklistItems: ["User outcome", "Key UI detail", "Experience tone"],
+			"When the button is tapped, show a [popup type] that feels [how it feels] and asks for [what it asks for]",
+		checklistItems: ["popup type", "how it feels", "what it asks for"],
 	},
 	[CODE_IDS[4]]: {
 		scaffoldTemplate:
-			"Change the header [element] to [new style] and do not modify the [protected areas]",
-		checklistItems: ["Target element", "New style", "Protected areas"],
+			"Change the header to [new header look] — keep the [what to protect] exactly as it is",
+		checklistItems: ["new header look", "what to protect"],
 	},
 	[CODE_IDS[5]]: {
 		checklistItems: ["Bug description", "Where it happens", "Expected behavior"],
@@ -94,28 +96,28 @@ const codingLessonScaffolds: Record<
 	},
 	[CODE_IDS[15]]: {
 		scaffoldTemplate:
-			"Here's an example of the pattern I want: [example]. Now build [what to build] the same way, matching [what to match]",
-		checklistItems: ["The example to copy", "What to build", "What to match"],
+			"Using the existing card as a reference, add [how many] more cards for [what they show] with the same style",
+		checklistItems: ["how many", "what they show"],
 	},
 	[CODE_IDS[16]]: {
 		scaffoldTemplate:
-			"Build [feature], but do not [what to avoid] and keep it [the limit]",
-		checklistItems: ["What to build", "What to avoid", "The limit"],
+			"Add a [timer type] below the heading using only what's already on the page — don't change [what to protect]",
+		checklistItems: ["timer type", "what to protect"],
 	},
 	[CODE_IDS[17]]: {
 		scaffoldTemplate:
-			"Reformat [content] as [output format], with [specific detail]",
-		checklistItems: ["The content", "Output format", "Specific detail"],
+			"Turn the FAQ items into a [format type] where [how it works] — keep the same questions and answers",
+		checklistItems: ["format type", "how it works"],
 	},
 	[CODE_IDS[18]]: {
 		scaffoldTemplate:
-			"Add [new element] and match the existing [reference element], especially its [shared traits]",
-		checklistItems: ["New element", "Reference element", "Shared traits"],
+			"Add a [button type] button next to the existing one — same size and shape, but [how it differs]",
+		checklistItems: ["button type", "how it differs"],
 	},
 	[CODE_IDS[19]]: {
 		scaffoldTemplate:
-			"Build the simplest version of [feature] first: just [the core], with no [extras yet]",
-		checklistItems: ["The feature", "The core only", "Extras to skip for now"],
+			"Add a simple [feature type] where you can [what it does] — nothing else yet",
+		checklistItems: ["feature type", "what it does"],
 	},
 	[CODE_IDS[20]]: {
 		checklistItems: ["The role AI should take", "The task", "The quality standard"],
@@ -134,12 +136,109 @@ const codingLessonScaffolds: Record<
 	},
 };
 
+/** Pre-challenge Prompty intro copy (promise + secret) for the live opening path. */
+const codingLessonIntros: Record<
+	string,
+	{ introPromise: string; introSecret: string }
+> = {
+	"code-1-easy": {
+		introPromise: "Want to build a real website… using nothing but words? 👀",
+		introSecret:
+			"The trick: describe what you want to see, not how to code it. You write the prompt — I'll show you how you did.",
+	},
+	"code-9-medium": {
+		introPromise: "Something almost-right… want to fix it without starting over? 👀",
+		introSecret:
+			"The trick: don't redo it all. Ask for the one or two tweaks you want and leave the rest.",
+	},
+	"code-10-medium": {
+		introPromise: "Bet you can't make AI use code it can't even see… 👀",
+		introSecret:
+			"The trick: tell AI what's already there first, then ask for the new bit.",
+	},
+	"code-4-easy": {
+		introPromise:
+			"This button does nothing… want to bring it to life in one line? 👀",
+		introSecret:
+			"The trick: say what should happen for the user, not how to wire it up.",
+	},
+	"code-2-easy": {
+		introPromise: "Want AI to style things your way, not its way? 👀",
+		introSecret:
+			"The trick: name your tools up front. Tell AI the stack and it stops guessing.",
+	},
+	"code-3-easy": {
+		introPromise:
+			"Can you add one thing… without AI 'fixing' everything else? 👀",
+		introSecret:
+			"The trick: ask for one change at a time, and say what to leave alone.",
+	},
+	"code-5-easy": {
+		introPromise:
+			"Want to change one part… and keep the rest perfectly untouched? 👀",
+		introSecret:
+			"The trick: name what AI must not touch. Guardrails keep the good stuff safe.",
+	},
+	"code-11-hard": {
+		introPromise: "Can you design something pretty… without knowing any CSS? 👀",
+		introSecret:
+			"The trick: describe the look in plain words — colors, spacing, hover — like talking to a designer.",
+	},
+	"code-12-hard": {
+		introPromise:
+			"AI just forgot everything… think you can get it back on track? 👀",
+		introSecret:
+			"The trick: recap what's already built first, then ask for the next thing.",
+	},
+	"code-19-easy": {
+		introPromise: "Want to build a feature without it blowing up on you? 👀",
+		introSecret:
+			"The trick: ask for the simplest version first. Get it working, then grow it.",
+	},
+	"code-18-easy": {
+		introPromise:
+			"Want a matching twin for something that already looks great? 👀",
+		introSecret:
+			"The trick: point at what already exists and tell AI to match it.",
+	},
+	"code-17-easy": {
+		introPromise:
+			"Want plain boring text to fold itself into something slick? 👀",
+		introSecret:
+			"The trick: name the exact format you want. The shape is part of the ask.",
+	},
+	"code-16-easy": {
+		introPromise:
+			"Want AI to build it your way… with rules it can't break? 👀",
+		introSecret:
+			"The trick: set the limits up front. What you forbid shapes the result too.",
+	},
+	"code-8-medium": {
+		introPromise:
+			"What happens when it all goes wrong… want to handle it before it does? 👀",
+		introSecret:
+			"The trick: name the edge cases yourself. AI only guards what you call out.",
+	},
+	"code-6-medium": {
+		introPromise:
+			"Found a bug? Want AI to squash it on the very first try? 👀",
+		introSecret:
+			"The trick: say what's wrong, where it happens, and what should happen instead.",
+	},
+	"code-7-medium": {
+		introPromise:
+			"Want AI to think before it builds… and save you 3 redos? 👀",
+		introSecret:
+			"The trick: ask for the plan first. Approve the approach before any code.",
+	},
+};
+
 const codingLessonsBase = [
 	{
 		id: CODE_IDS[0],
 		title: "Describe the outcome, not the code",
 		instruction:
-			"This page needs a hero section. Craft a prompt that describes what you want the user to see: a headline, supporting text, and a button. Use your own words; don't copy this instruction.",
+			"The page is blank. Describe to an AI what the top of this page should look like.",
 		whatUserSees:
 			"A blank webpage. The body is empty. Nothing at the top yet: no headline, no subtext, no call to action.",
 		hint: "Describe what the user sees: the headline text, the subtext, and what the button says and does. Don't describe the HTML or code.",
@@ -199,9 +298,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[1],
-		title: "Name your tech stack",
+		title: "Tell the AI which tools to use",
 		instruction:
-			"This page needs a navigation bar. Craft a prompt that tells AI what to build and that you're using Tailwind for styling. Use your own words.",
+			"The page needs a menu at the top. Tell the AI what to build and mention what styling tool you want it to use.",
 		whatUserSees:
 			"A page with Tailwind CSS loaded. The body is empty: no navbar, no links, nothing to navigate yet.",
 		hint: "Explicitly tell AI you're using Tailwind CSS. AI doesn't know your stack unless you say so.",
@@ -260,9 +359,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[2],
-		title: "Scope to one change at a time",
+		title: "Change one thing at a time",
 		instruction:
-			"This page needs a contact form below the heading. Craft a prompt that asks for name, email, and message fields plus a submit button, and explicitly tells AI to leave the existing heading untouched. Use your own words.",
+			"There's a heading but nothing below it. Ask the AI to add a contact form — and tell it not to touch the heading.",
 		whatUserSees:
 			"A contact page with a bold 'Contact Us' heading at the top. Nothing below it: no form fields, no submit button yet.",
 		hint: "Ask only for the form. Tell AI to leave the heading exactly as it is.",
@@ -323,7 +422,7 @@ const codingLessonsBase = [
 		id: CODE_IDS[3],
 		title: "Describe what happens, not how",
 		instruction:
-			"The Sign Up button does nothing when clicked. Craft a prompt that describes what the user should see or experience when they click it (e.g. a modal, a form, a message). Describe the outcome, not the code. Use your own words.",
+			"The button does nothing when tapped. Describe what the user should SEE happen — not how to code it.",
 		whatUserSees:
 			"A page with a blue Sign Up button. When you click it, nothing happens: no modal, no redirect, no feedback.",
 		hint: "Describe what the user sees and experiences (e.g. 'show a modal with email and password fields'). Don't mention event listeners or JavaScript.",
@@ -378,7 +477,7 @@ const codingLessonsBase = [
 		id: CODE_IDS[4],
 		title: "Protect what must stay the same",
 		instruction:
-			"The header is dark gray. Craft a prompt that asks for a different header color and explicitly tells AI not to touch the nav links or main content. Use your own words.",
+			"The dark bar at the top has a title and some menu links, with a welcome message below it. Ask the AI to change the color of that top bar — and tell it to leave the menu links and the message exactly as they are.",
 		whatUserSees:
 			"A page with a dark gray header bar showing 'My App' and links (Home, About, Contact). Below that, main content: 'Welcome to my app.'",
 		hint: "Tell AI exactly what to change (the header color) and what to leave alone (the links and main content).",
@@ -431,9 +530,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[5],
-		title: "Report bugs: what's wrong, where, and expected",
+		title: "Report a bug clearly",
 		instruction:
-			"This form has a bug: it submits when the email field is empty. Craft a prompt that describes what's wrong, where it happens, and what should happen instead. Use your own words.",
+			"The form lets you submit with nothing typed in. Describe what's broken, where it happens, and what should happen instead.",
 		whatUserSees:
 			"A form with an email field and a Submit button. If you leave the email empty and click Submit, it still shows 'Form submitted!': no validation, no error message.",
 		hint: "Include three things: what's wrong (submits when empty), where (the email field), and what should happen instead (show error, block submit).",
@@ -487,7 +586,7 @@ const codingLessonsBase = [
 		id: CODE_IDS[6],
 		title: "Ask for a plan before code",
 		instruction:
-			"You want to add a dark mode toggle. Craft a prompt that asks AI to plan the approach first (steps, components, edge cases) without writing any code. Use your own words.",
+			"You want a light/dark mode switch. Before asking for any code, ask the AI to walk you through its plan first.",
 		whatUserSees:
 			"A simple app with a header ('My App') and main content ('Welcome to my app.'). White background, black text. No dark mode toggle yet.",
 		hint: "Say something like 'Plan how to add dark mode before writing code. List the steps and any edge cases (e.g. saving the user's preference).'",
@@ -540,9 +639,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[7],
-		title: "Name edge cases in your prompt",
+		title: "Plan for what could go wrong",
 		instruction:
-			"This page fetches users but has no error or empty-state handling. Craft a prompt that names both edge cases and what the user should see in each. Use your own words.",
+			"The user list works when data loads — but what if it fails, or comes back empty? Describe both situations and what the user should see.",
 		whatUserSees:
 			"A 'Users' page that fetches names from an API and shows them in a list. When the request succeeds, you see names. When it fails or returns nothing, you see nothing: no error message, no empty state.",
 		hint: "List both edge cases explicitly: 'When the request fails, show X. When the list is empty, show Y.' AI won't add them unless you name them.",
@@ -595,9 +694,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[8],
-		title: "Refine with a focused follow-up",
+		title: "Tweak it without starting over",
 		instruction:
-			"This card feels cramped. Craft a prompt that asks for two changes only: more spacing between elements and a larger title. Tell AI to leave everything else untouched. Use your own words.",
+			"This card feels too tight and the title is hard to read. Ask the AI for more space inside the card and a larger title — don't change anything else.",
 		whatUserSees:
 			"A small card with a tight title ('Card Title'), description text, and a blue Action button. The spacing feels cramped and the title is a bit small.",
 		hint: "Write a short prompt like 'Increase spacing between the elements and make the title bigger.' Don't describe the whole card again.",
@@ -652,7 +751,7 @@ const codingLessonsBase = [
 		id: CODE_IDS[9],
 		title: "Share the context AI needs",
 		instruction:
-			"This app has an authStore with a logout() method but no logout button. Craft a prompt that tells AI about the existing authStore and asks for a navbar button that calls it. Use your own words.",
+			"There's no logout button. Tell the AI about the logout function that already exists and ask it to add a button to the menu that uses it.",
 		whatUserSees:
 			"A dark header bar with 'My App' on the left and links (Dashboard, Settings) on the right. No logout button. The app has an authStore with a logout function, but the UI doesn't use it yet.",
 		hint: "Tell AI that authStore exists and has a logout() method. Without that, it will write generic code that doesn't connect to your app.",
@@ -706,7 +805,7 @@ const codingLessonsBase = [
 		id: CODE_IDS[10],
 		title: "Describe the design in plain language",
 		instruction:
-			"This pricing card looks plain. Craft a prompt that describes how you want it to look (colors, spacing, hover effects), using only plain language, no class names or CSS. Describe it as you would to a designer. Use your own words.",
+			"The pricing card looks plain and forgettable. Describe how to make it look better — use plain language only. No code terms.",
 		whatUserSees:
 			"A gray page with a centered white card: 'Pro Plan', '$29/mo', a feature list, and a blue Get Started button. It works but looks plain: no hover effects, no visual polish.",
 		hint: "Say things like 'make the button darken on hover' or 'add more space between the price and the list', not 'add hover:bg-blue-600' or 'mb-4'.",
@@ -759,9 +858,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[11],
-		title: "Brief AI when it loses track",
+		title: "Catch the AI up when it forgets",
 		instruction:
-			"AI has lost context. Craft a prompt that (1) briefly summarizes what this app is and what's already built, then (2) asks for an 'Add task' button. Don't copy this instruction; put it in your own words.",
+			"The AI has no idea what this app is or what's already built. Catch it up, then ask for one new thing.",
 		whatUserSees:
 			"A TaskFlow app: blue header with title and Logout button, main area with 'Your Tasks' and a list (Buy groceries, Finish project report). You want to add a new feature but AI has lost context.",
 		hint: "Structure your prompt: 'This is a task app. It has [X, Y, Z]. Add [specific feature].' A clear briefing gets better output than jumping straight to the request.",
@@ -813,9 +912,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[12],
-		title: "Ask AI to audit its code",
+		title: "Ask the AI to check its own work",
 		instruction:
-			"This login form may have security and UX issues. Craft a prompt that asks AI to audit it for specific things: hardcoded secrets, missing error handling, missing loading state. Give it a checklist. Use your own words.",
+			"This login form has hidden problems — like a secret key left in the code and no message when something goes wrong. Ask the AI to review it, and give it a checklist of specific things to look for.",
 		whatUserSees:
 			"A login form with username, password, and Login button. The code submits to an API, but there's a hardcoded API key, no error handling if the request fails, and no loading state.",
 		hint: "Give AI a checklist: 'Check for hardcoded values, missing error handling, and missing loading state.' Specific requests get specific findings.",
@@ -868,9 +967,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[13],
-		title: "Spec first, then prompt",
+		title: "Write a quick brief first",
 		instruction:
-			"Write a short spec for a task manager (purpose, who uses it, at least two features, Tailwind). Then use that spec as your prompt, but rephrase it in your own words; don't paste the spec verbatim.",
+			"Before you prompt for anything, write a short brief — what the app is, who it's for, and what it needs. Then use that brief as your prompt.",
 		whatUserSees:
 			"A blank page. Tailwind is loaded. Nothing built yet; you're starting from scratch with a spec and a prompt.",
 		hint: "Example: 'A task manager for individuals. Users can add tasks and mark them complete. Use Tailwind. Build the full structure.' Then paste it as your prompt.",
@@ -924,7 +1023,7 @@ const codingLessonsBase = [
 		id: CODE_IDS[14],
 		title: "Pack everything into one prompt",
 		instruction:
-			"Build a user profile card in one prompt. Your prompt must cover: Tailwind, fetching from jsonplaceholder.typicode.com/users/1, loading state, error state, and what the card displays. Craft it in your own words; don't copy this list verbatim.",
+			"Build a user profile card in a single prompt. Cover the visual layout, where the data comes from, and what the user sees while it loads or if something goes wrong.",
 		whatUserSees:
 			"A gray page with Tailwind loaded. Nothing on it: no profile card, no data. You're building the whole feature in one prompt.",
 		hint: "Include every requirement in one prompt: stack, API URL, loading state, error state, and what the card should display. Leave nothing for AI to guess.",
@@ -995,7 +1094,7 @@ const codingLessonsBase = [
 		id: CODE_IDS[15],
 		title: "Show, don't just tell",
 		instruction:
-			"This page has one product card. Craft a prompt that points AI at the existing card as an example, then asks it to create two more just like it for different products. Use your own words; don't copy this instruction.",
+			"There's one product card on the page. Point the AI to it as an example and ask for two more just like it.",
 		whatUserSees:
 			"A product grid with a single card: an image box, a name ('Wireless Headphones'), a price ('$99'), and a Buy button. There's empty space for more cards, but only one exists.",
 		hint: "Reference the card that's already there: 'Here's the card I have — build two more like it for these products.' A concrete example beats a long description.",
@@ -1050,7 +1149,7 @@ const codingLessonsBase = [
 		id: CODE_IDS[16],
 		title: "Set the boundaries",
 		instruction:
-			"This page needs a countdown timer. Craft a prompt that asks for it but sets clear limits: no external libraries, vanilla JavaScript only, and don't change anything above the heading. Use your own words.",
+			"Ask for a countdown timer below the heading — but set clear rules: use only what's already available on the page, and don't touch anything above the heading.",
 		whatUserSees:
 			"A page with a single heading, 'Launch in:'. Below it, nothing — no timer, no numbers, no script yet.",
 		hint: "State your limits up front: 'Use plain JavaScript, no libraries, and leave the heading alone.' Constraints keep AI from over-building.",
@@ -1103,9 +1202,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[17],
-		title: "Ask for the output format you want",
+		title: "Ask for the layout you want",
 		instruction:
-			"This page has three FAQ items shown as plain text. Craft a prompt that asks AI to reformat them as a collapsible accordion — each answer hidden until its question is clicked. Be specific about the format. Use your own words.",
+			"Three FAQs are shown as plain text. Ask the AI to turn them into a collapsible list — answers hidden until you tap the question.",
 		whatUserSees:
 			"A 'FAQ' heading followed by three questions and answers, all shown at once as plain paragraphs. Nothing is collapsible — every answer is always visible.",
 		hint: "Describe the exact format you want: 'Make each question a clickable header that expands to show its answer, collapsed by default.' Vague format requests get vague layouts.",
@@ -1158,9 +1257,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[18],
-		title: "Match an existing reference",
+		title: "Match what's already there",
 		instruction:
-			"This page has a styled 'Primary' button. Craft a prompt that adds a 'Secondary' button next to it, matching the primary button's size and shape but in a muted gray style. Anchor your request to the existing button. Use your own words.",
+			"There's one button on the page. Ask the AI to add a second button next to it — same size and shape, but a different style.",
 		whatUserSees:
 			"A page with one button labeled 'Primary' — blue, rounded, with comfortable padding. There's space beside it, but no second button.",
 		hint: "Tell AI to match what's already there: 'Add a Secondary button with the same size and rounding as the Primary one, but gray.' A reference removes guesswork.",
@@ -1216,7 +1315,7 @@ const codingLessonsBase = [
 		id: CODE_IDS[19],
 		title: "Start with the simplest version",
 		instruction:
-			"You want a to-do feature. Craft a prompt that asks AI for the simplest working version first — just an input that adds typed items to a list — with no editing, deleting, or saving yet. Use your own words.",
+			"The page has a heading but nothing works yet. Ask the AI for the most basic to-do list — just enough to type a task and see it appear.",
 		whatUserSees:
 			"A page with a 'My Tasks' heading and an empty area below. There's no input box and no list — nothing to add tasks with yet.",
 		hint: "Ask for the core only: 'Just an input and a list that adds items. No delete, edit, or storage for now.' Scope it down on purpose.",
@@ -1271,7 +1370,7 @@ const codingLessonsBase = [
 		id: CODE_IDS[20],
 		title: "Give AI a role",
 		instruction:
-			"This signup form works but looks unfinished. Craft a prompt that tells AI to act as a senior frontend engineer and bring the form up to a production-quality standard. Set the role, the task, and the bar. Use your own words.",
+			"The sign up form is bare and basic. Tell the AI what role to play, what to improve, and what \"good\" looks like to you.",
 		whatUserSees:
 			"A bare signup form: an unstyled email input, an unstyled password input, and a plain 'Sign Up' button stacked on a white page. It functions, but looks like a prototype.",
 		hint: "Open with a role and a standard: 'Act as a senior frontend engineer. Polish this signup form to production quality — spacing, labels, focus states, and a clear hierarchy.'",
@@ -1323,9 +1422,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[21],
-		title: "Define 'done' with acceptance criteria",
+		title: "Spell out what 'done' looks like",
 		instruction:
-			"This list needs a search box. Craft a prompt that defines 'done' with clear acceptance criteria: filtering is case-insensitive, a result count is shown, and a 'no matches' message appears when nothing matches. Use your own words.",
+			"Add a search box to the list — but define exactly what \"working\" means before the AI builds it.",
 		whatUserSees:
 			"A list of five fruit names (Apple, Banana, Cherry, Date, Elderberry). There's no search box, so the full list always shows with no way to filter it.",
 		hint: "Spell out what 'finished' means as a checklist: case-insensitive matching, a visible count, and an empty-state message. Acceptance criteria leave nothing ambiguous.",
@@ -1384,9 +1483,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[22],
-		title: "Ask for just the diff",
+		title: "Ask to see only what changed",
 		instruction:
-			"You only want to change the button color in this component. Craft a prompt that asks AI to make that one change and show only what changed — not the entire file. Use your own words.",
+			"You want one button color changed. Ask for only that change — and tell the AI to show you just what it modified, not the whole file.",
 		whatUserSees:
 			"A pricing card with a title, a price, three feature lines, and a green 'Choose plan' button. Everything is fine except you want the button to be blue.",
 		hint: "Ask for a focused change and a focused answer: 'Change only the button to blue and show me just the lines that changed.' You stay in control of large files this way.",
@@ -1439,9 +1538,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[23],
-		title: "Prompt for accessibility",
+		title: "Make it usable for everyone",
 		instruction:
-			"This toolbar uses icon-only buttons with no labels. Craft a prompt that asks AI to make it accessible: every control needs an accessible label, and it must be usable with a keyboard. Name the accessibility needs. Use your own words.",
+			"The toolbar has icon-only buttons — no labels, no keyboard support. Ask the AI to fix it so everyone can use it.",
 		whatUserSees:
 			"A small toolbar with three icon-only buttons (a printer, a heart, and a trash can). A sighted mouse user can guess them, but there are no labels and nothing announces what each does.",
 		hint: "Name the requirements: 'Add accessible labels to each icon button and make sure they're reachable and operable with the keyboard.' Accessibility shows up only when you ask for it.",
@@ -1494,9 +1593,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[24],
-		title: "Prompt for responsive behavior",
+		title: "Make it work on any screen size",
 		instruction:
-			"This three-column layout breaks on phones. Craft a prompt that describes how it should behave on mobile versus desktop — for example, one column stacked on small screens and three across on large ones. Use your own words.",
+			"The three-column layout breaks on a phone screen. Describe how it should behave on small screens versus large ones.",
 		whatUserSees:
 			"Three colored boxes sitting side by side in a fixed three-column grid. On a narrow phone screen they squash together instead of stacking.",
 		hint: "Describe the behavior at each size: 'On phones, stack the boxes in one column; on wider screens, show three across.' Name the behavior, not the classes.",
@@ -1549,9 +1648,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[25],
-		title: "Decompose a big feature into steps",
+		title: "Break a big feature into steps",
 		instruction:
-			"You want a multi-step checkout flow (cart review, shipping, payment, confirmation). Craft a prompt that asks AI to break this into an ordered build plan and then implement only the first step. Drive the decomposition yourself. Use your own words.",
+			"A checkout flow has multiple steps. Ask the AI to map out the full build plan first — then build only the first step.",
 		whatUserSees:
 			"A blank page with Tailwind loaded and a single heading, 'Checkout'. The full flow doesn't exist yet — there are no steps, no forms, nothing built.",
 		hint: "Don't ask for the whole flow at once. Ask AI to lay out the steps in order, then build just step one. Sequencing a big feature is its own prompting skill.",
@@ -1605,7 +1704,7 @@ const codingLessonsBase = [
 		id: CODE_IDS[26],
 		title: "Ask for tests alongside the code",
 		instruction:
-			"This page has a getDiscountedPrice function with no checks on it. Craft a prompt that asks AI to add inline tests (assertions) that verify it — including edge cases like a 0% and a 100% discount and an invalid input — and to show the results on the page. Use your own words.",
+			"Ask the AI to write tests for the price calculator — including what happens with unusual inputs — and show the results on the page.",
 		whatUserSees:
 			"A page showing 'Price calculator'. Behind it is a getDiscountedPrice(price, percent) function, but nothing tests it — there's no proof it actually works.",
 		hint: "Ask for verification, not just code: 'Add assertions that test this function, including 0% and 100% discounts and an invalid input, and show pass/fail on the page.'",
@@ -1657,9 +1756,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[27],
-		title: "Hold AI to a design system",
+		title: "Stick to the page's colors and spacing",
 		instruction:
-			"This page defines a small set of design tokens (colors and spacing). Craft a prompt that asks AI to build an alert banner using only those tokens — no hard-coded colors or one-off spacing. Hold it to the system. Use your own words.",
+			"The page already has a set of colors and spacing defined for it, but nothing uses them yet. Ask the AI to build an alert banner using only those colors and spacing — no new colors or one-off sizes.",
 		whatUserSees:
 			"A page with CSS variables defined in :root — brand colors and a spacing scale — but nothing uses them yet. The body is empty below the style block.",
 		hint: "Point AI at the tokens and forbid anything outside them: 'Use only the CSS variables defined in :root — no new hex colors or arbitrary pixel values.' Constrain it to the system.",
@@ -1712,9 +1811,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[28],
-		title: "Debug from the error message",
+		title: "Fix it using the error message",
 		instruction:
-			"Clicking the button throws: 'Uncaught TypeError: Cannot read properties of null (reading addEventListener)'. Craft a prompt that includes the exact error, asks AI for the root cause, and requests the smallest fix — not a rewrite. Use your own words.",
+			"You've got an error message in the console. Include it in your prompt, ask what's causing it, and request the smallest possible fix.",
 		whatUserSees:
 			"A page with a 'Save' button. Clicking it does nothing, and the console shows a TypeError about reading addEventListener on null. The script runs before the button exists.",
 		hint: "Paste the exact error and ask for diagnosis first: 'Here's the error — what's the root cause, and what's the smallest change that fixes it?' Don't ask for a rewrite.",
@@ -1766,9 +1865,9 @@ const codingLessonsBase = [
 	},
 	{
 		id: CODE_IDS[29],
-		title: "Write a reusable prompt template",
+		title: "Build a prompt you can reuse",
 		instruction:
-			"You keep building similar components. Craft a reusable prompt template — with clearly marked placeholders for the parts that change (the component, its fields, its style, and the stack) — then use it once to build a 'testimonial' card. Use your own words.",
+			"Write a reusable prompt template you could use for any part of a page — with blank placeholders to fill in. Then use it once to build something real.",
 		whatUserSees:
 			"A blank page with Tailwind loaded. Nothing is built. This is the capstone: you're writing a prompt you could reuse for any component, then proving it on a testimonial card.",
 		hint: "Build a template, not a one-off: 'Build a [component] using [stack] with [fields], styled [style direction], handling [edge cases].' Then fill the brackets for a testimonial card.",
@@ -1823,4 +1922,5 @@ const codingLessonsBase = [
 export const codingLessons = codingLessonsBase.map((lesson) => ({
 	...lesson,
 	...codingLessonScaffolds[lesson.id],
+	...codingLessonIntros[lesson.id],
 }));

@@ -1,6 +1,6 @@
 import { action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
-import { allLevels } from "./levels_data";
+import { allLevels, devOnlyLevels } from "./levels_data";
 
 const logSeed = (...args: unknown[]): void => {};
 
@@ -399,7 +399,10 @@ export const seedLearningResources = action({
 export const seedLevels = action({
 	args: {},
 	handler: async (ctx) => {
-		const canonicalIds = allLevels.map((level) => level.id);
+		const canonicalIds = [
+			...allLevels.map((level) => level.id),
+			...devOnlyLevels.map((level) => level.id),
+		];
 
 		// Remove duplicate levels (keep one per id, newest first)
 		const duplicatesRemoved = await ctx.runMutation(
@@ -425,11 +428,15 @@ export const seedLevels = action({
 		}
 
 		for (const level of allLevels) {
-			// `lessonMode` is an in-code hint for the quest-node builder (e.g. force a
-			// capstone to "boss"); it is not part of the levels table schema, so strip
-			// it before writing to the DB.
-			const { lessonMode: _lessonMode, ...levelForDb } = level as typeof level & {
+			const {
+				lessonMode: _lessonMode,
+				introPromise: _introPromise,
+				introSecret: _introSecret,
+				...levelForDb
+			} = level as typeof level & {
 				lessonMode?: string;
+				introPromise?: string;
+				introSecret?: string;
 			};
 			const existing = await ctx.runQuery(api.queries.getLevelById, {
 				id: levelForDb.id,
@@ -439,6 +446,7 @@ export const seedLevels = action({
 					...levelForDb,
 					appId: "prompt-pal",
 					isActive: true,
+					isDevOnly: false,
 				});
 				logSeed(`Created level: ${levelForDb.title}`);
 			} else {
@@ -446,12 +454,48 @@ export const seedLevels = action({
 					...levelForDb,
 					appId: "prompt-pal",
 					isActive: true,
+					isDevOnly: false,
 				});
 				logSeed(`Updated level: ${levelForDb.title}`);
 			}
 		}
 
-		logSeed("Levels seeding completed - 40 levels created/updated");
+		for (const level of devOnlyLevels) {
+			const {
+				lessonMode: _lessonMode,
+				introPromise: _introPromise,
+				introSecret: _introSecret,
+				...levelForDb
+			} = level as typeof level & {
+				lessonMode?: string;
+				introPromise?: string;
+				introSecret?: string;
+			};
+			const existing = await ctx.runQuery(api.queries.getLevelById, {
+				id: levelForDb.id,
+			});
+			if (!existing) {
+				await ctx.runMutation(internal.mutations.createLevel, {
+					...levelForDb,
+					appId: "prompt-pal",
+					isActive: true,
+					isDevOnly: true,
+				});
+				logSeed(`Created dev level: ${levelForDb.title}`);
+			} else {
+				await ctx.runMutation(internal.mutations.updateLevel, {
+					...levelForDb,
+					appId: "prompt-pal",
+					isActive: true,
+					isDevOnly: true,
+				});
+				logSeed(`Updated dev level: ${levelForDb.title}`);
+			}
+		}
+
+		logSeed(
+			`Levels seeding completed - ${allLevels.length + devOnlyLevels.length} levels created/updated`,
+		);
 	},
 });
 
